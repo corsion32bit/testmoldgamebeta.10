@@ -1,0 +1,2986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>pet mold</title>
+<style>
+  :root{ --paper:#0f0c08; --ink:#e8e2d4; --line:rgba(232,226,212,.14); --mold:#c8d43a; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:#0f0c08; color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    overflow:hidden; -webkit-tap-highlight-color:transparent;
+  }
+  #cv{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none;background:#0f0c08}
+  #cv.dragging{cursor:grabbing}
+  #cv.warping{cursor:crosshair}
+  #cv.placing{cursor:crosshair}
+  .title{position:fixed;top:18px;left:22px;z-index:5;font-size:11px;letter-spacing:.30em;text-transform:uppercase;opacity:.35;pointer-events:none}
+  .scoreboard{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:10;
+    background:rgba(15,12,8,.82);
+    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    border:1px solid var(--line); border-radius:14px;
+    padding:9px 16px 10px; min-width:230px;
+    font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+    pointer-events:none;
+    box-shadow:0 4px 24px rgba(0,0,0,.5);
+  }
+  .sb-row{display:flex; justify-content:space-between; gap:20px; padding:1px 0; line-height:1.6}
+  .sb-lbl{opacity:.4}
+  .sb-val{opacity:.95; font-variant-numeric:tabular-nums; letter-spacing:.08em}
+  .sb-rarity{font-weight:700; letter-spacing:.22em; font-size:10px; text-shadow:0 0 8px currentColor}
+  .sb-boost{font-weight:700; color:#ffb84a; text-shadow:0 0 10px rgba(255,184,74,.7)}
+  .sb-bar{height:3px; background:rgba(232,226,212,.10); border-radius:99px; margin-top:7px; overflow:hidden}
+  .sb-bar > div{height:100%; background:var(--mold); width:0%; transition:width .12s linear}
+  .sb-hint{margin-top:6px; font-size:8.5px; letter-spacing:.20em; opacity:.32; text-align:center}
+  @keyframes sbPop{0%{transform:translateX(-50%) scale(1)}45%{transform:translateX(-50%) scale(1.06)}100%{transform:translateX(-50%) scale(1)}}
+  .scoreboard.pop{animation:sbPop .38s cubic-bezier(.3,.9,.3,1)}
+  @keyframes sbFlash{0%{box-shadow:0 4px 24px rgba(0,0,0,.5), 0 0 0 0 rgba(200,212,58,.6)}100%{box-shadow:0 4px 24px rgba(0,0,0,.5), 0 0 0 28px rgba(200,212,58,0)}}
+  .scoreboard.flash{animation:sbFlash .8s ease}
+  .hud{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding:16px 22px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;pointer-events:none}
+  .hud .hint{opacity:.3;text-align:right;line-height:1.7}
+  #seedEl{opacity:.4}
+  #coordEl{opacity:.35;font-size:9.5px}
+  .menu-btn{position:fixed;top:16px;right:18px;z-index:20;font:inherit;font-size:11px;letter-spacing:.20em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--line);padding:8px 17px;border-radius:999px;cursor:pointer;transition:background .15s,color .15s}
+  .menu-btn:hover{background:var(--ink);color:#0f0c08}
+  .capsule-btn{right:104px}
+
+  .capsule-modal{position:fixed;inset:0;z-index:75;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:18px}
+  .capsule-modal.on{display:flex}
+  .capsule-box{
+    background:#15110b;color:var(--ink);border-radius:14px;padding:18px;
+    width:min(700px,100%);max-height:88vh;display:flex;flex-direction:column;gap:12px;
+    box-shadow:0 30px 90px rgba(0,0,0,.65);border:1px solid var(--line);
+    overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  }
+  .capsule-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+  .capsule-head-title{font-size:11px;letter-spacing:.26em;text-transform:uppercase;opacity:.75}
+  .capsule-head-sub{font-size:9px;letter-spacing:.06em;opacity:.4;margin-top:5px;line-height:1.5}
+  .capsule-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .capsule-card{border:1px solid var(--line);border-radius:10px;padding:11px;background:rgba(232,226,212,.025);min-width:0}
+  .capsule-card.occupied{border-color:rgba(200,212,58,.30);background:rgba(200,212,58,.035)}
+  .capsule-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+  .capsule-name{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+  .capsule-state{font-size:8px;letter-spacing:.14em;text-transform:uppercase;opacity:.45}
+  .capsule-state.saved{opacity:.85;color:var(--mold)}
+  .capsule-info{min-height:38px;font-size:9px;line-height:1.6;letter-spacing:.05em;opacity:.56;word-break:break-word}
+  .capsule-rarity{font-weight:700;letter-spacing:.12em}
+  .capsule-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:9px}
+  .capsule-actions button{font:inherit;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--line);padding:8px 5px;border-radius:7px;cursor:pointer;transition:background .15s,color .15s,opacity .15s}
+  .capsule-actions button:hover:not(:disabled){background:var(--ink);color:#0f0c08}
+  .capsule-actions button:disabled{opacity:.2;cursor:not-allowed}
+  .capsule-footer{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:10px;border-top:1px solid var(--line)}
+  .capsule-footer-note{font-size:8.5px;letter-spacing:.06em;opacity:.36;line-height:1.5}
+  .capsule-footer-actions{display:flex;gap:6px;flex-shrink:0}
+  .capsule-footer-actions button{font:inherit;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 10px;border-radius:7px;cursor:pointer}
+  .capsule-footer-actions button:hover{background:var(--ink);color:#0f0c08}
+  .capsule-close{font:inherit;font-size:9px;letter-spacing:.16em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 13px;border-radius:7px;cursor:pointer}
+  .capsule-close:hover{background:var(--ink);color:#0f0c08}
+  @media (max-width:560px){
+    .capsule-btn{right:104px}
+    .capsule-grid{grid-template-columns:1fr}
+    .capsule-box{max-height:92vh;padding:14px}
+  }
+
+  .warp-btn{
+    position:fixed; left:18px; top:80px; z-index:25;
+    width:78px; height:78px;
+    border-radius:50%;
+    background:rgba(10,3,18,.85);
+    border:2px solid rgba(200,60,255,.55);
+    color:#e5a8ff;
+    font:inherit; font-size:9.5px; letter-spacing:.18em; text-transform:uppercase;
+    cursor:pointer;
+    display:none;
+    align-items:center; justify-content:center;
+    flex-direction:column;
+    gap:4px;
+    box-shadow:0 6px 24px rgba(120,20,180,.35), 0 0 0 0 rgba(200,60,255,.5);
+    transition:border-color .2s, box-shadow .2s, background .2s, transform .1s;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+  }
+  .warp-btn.show{display:flex}
+  .warp-btn:hover{border-color:#e5a8ff; box-shadow:0 6px 30px rgba(180,40,220,.55)}
+  .warp-btn:active{transform:scale(.94)}
+  .warp-btn .icon{font-size:24px; line-height:1; color:#c85cff; text-shadow:0 0 8px rgba(200,80,255,.9);}
+  .warp-btn .lbl{font-size:8.5px; opacity:.75; letter-spacing:.2em}
+  .warp-btn.cooldown{border-color:rgba(120,120,120,.35); color:rgba(200,200,200,.5); cursor:not-allowed; background:rgba(20,20,20,.85)}
+  .warp-btn.cooldown .icon{color:rgba(180,180,180,.5); text-shadow:none}
+  .warp-btn.armed{
+    border-color:#ff5cff; background:rgba(40,0,60,.9);
+    animation:warpPulse 1s ease-in-out infinite;
+  }
+  @keyframes warpPulse{
+    0%{box-shadow:0 6px 24px rgba(180,40,220,.4), 0 0 0 0 rgba(255,92,255,.7)}
+    70%{box-shadow:0 6px 30px rgba(220,40,240,.7), 0 0 0 18px rgba(255,92,255,0)}
+    100%{box-shadow:0 6px 24px rgba(180,40,220,.4), 0 0 0 0 rgba(255,92,255,0)}
+  }
+
+  .food-btn{
+    position:fixed; right:18px; bottom:100px; z-index:25;
+    width:72px; height:72px;
+    border-radius:50%;
+    background:rgba(8,18,8,.85);
+    border:2px solid rgba(180,220,60,.45);
+    color:#d8f0a0;
+    font:inherit; font-size:9px; letter-spacing:.16em; text-transform:uppercase;
+    cursor:pointer;
+    display:flex;
+    align-items:center; justify-content:center;
+    flex-direction:column;
+    gap:4px;
+    box-shadow:0 6px 24px rgba(60,120,20,.35), 0 0 0 0 rgba(180,220,60,.5);
+    transition:border-color .2s, box-shadow .2s, background .2s, transform .1s;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+  }
+  .food-btn:hover{border-color:#c8f07a; box-shadow:0 6px 30px rgba(120,200,40,.55)}
+  .food-btn:active{transform:scale(.94)}
+  .food-btn .icon{font-size:22px; line-height:1; color:#c8f07a; text-shadow:0 0 8px rgba(180,220,60,.9);}
+  .food-btn .lbl{font-size:8px; opacity:.75; letter-spacing:.18em}
+  .food-btn.armed{
+    border-color:#e8ff90; background:rgba(30,50,15,.92);
+    color:#e8ff90;
+    animation:foodPulse 1s ease-in-out infinite;
+  }
+  .food-btn.armed .icon{color:#e8ff90; text-shadow:0 0 10px rgba(200,240,120,1);}
+  @keyframes foodPulse{
+    0%{box-shadow:0 6px 24px rgba(120,180,40,.4), 0 0 0 0 rgba(200,240,120,.75)}
+    70%{box-shadow:0 6px 30px rgba(180,220,60,.7), 0 0 0 20px rgba(200,240,120,0)}
+    100%{box-shadow:0 6px 24px rgba(120,180,40,.4), 0 0 0 0 rgba(200,240,120,0)}
+  }
+
+  .panel{position:fixed;top:0;right:0;bottom:0;z-index:30;width:min(345px,92vw);background:#15110b;border-left:1px solid var(--line);box-shadow:-24px 0 60px rgba(0,0,0,.5);transform:translateX(102%);transition:transform .36s cubic-bezier(.22,.9,.28,1);display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;padding-bottom:30px}
+  .panel.open{transform:translateX(0)}
+  .panel-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid var(--line);background:#15110b;font-size:11px;letter-spacing:.26em;text-transform:uppercase}
+  .icon-btn{background:none;border:0;font:inherit;font-size:13px;line-height:1;color:inherit;opacity:.45;cursor:pointer;padding:4px 6px}
+  .icon-btn:hover{opacity:1}
+  .sec{padding:16px 20px;border-bottom:1px solid var(--line)}
+  .sec h4{margin:0 0 12px;font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;opacity:.4;font-weight:600}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:6px 0;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;cursor:default}
+  .row .val{opacity:.55;text-transform:none;letter-spacing:.04em;font-size:11px;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  label.row{cursor:pointer}
+  .wide{width:100%;margin-top:10px;font:inherit;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--line);padding:11px;border-radius:7px;cursor:pointer;transition:background .15s,color .15s}
+  .wide:hover{background:var(--ink);color:#0f0c08}
+  .wide:active{transform:translateY(1px)}
+  .wide + .wide{margin-top:8px}
+  .switch{position:relative;flex:0 0 auto;display:block}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .switch .track{display:block;width:38px;height:21px;border:1px solid var(--line);border-radius:999px;position:relative;transition:background .18s}
+  .switch .knob{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--ink);transition:transform .18s,background .18s}
+  .switch input:checked + .track{background:var(--ink)}
+  .switch input:checked + .track .knob{transform:translateX(17px);background:#0f0c08}
+  input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:130px;height:20px;cursor:pointer;flex:0 0 auto}
+  input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--ink);opacity:.35}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--ink);margin-top:-6px}
+  input[type=range]::-moz-range-track{height:1px;background:var(--ink);opacity:.35}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:var(--ink)}
+  .foods{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:9.5px;letter-spacing:.10em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--line);padding:6px 10px;border-radius:999px;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+  .chip i{width:9px;height:9px;border-radius:50%;display:block;border:1px solid rgba(255,255,255,.15)}
+  .chip:hover{border-color:var(--ink)}
+  .chip.on{border-color:var(--ink);background:var(--ink);color:#0f0c08}
+  .chip.on i{border-color:#0f0c08}
+  .meter{height:4px;border:1px solid var(--line);border-radius:999px;overflow:hidden;margin:4px 0 2px}
+  .meter > div{height:100%;background:var(--mold);width:0%;transition:width .3s ease}
+  .toast{position:fixed;left:50%;bottom:76px;z-index:60;background:var(--ink);color:#0f0c08;padding:10px 20px;border-radius:999px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;opacity:0;pointer-events:none;transform:translate(-50%,10px);transition:opacity .25s,transform .25s;max-width:88vw;text-align:center}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .modal{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);padding:20px}
+  .modal.on{display:flex}
+  .modal-box{
+    background:#15110b;color:var(--ink);border-radius:12px;padding:20px;
+    width:min(520px,100%); max-height:88vh;
+    display:flex; flex-direction:column; gap:12px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6); border:1px solid var(--line);
+    overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+  }
+  .modal-box h3{margin:0;font-size:11px;letter-spacing:.26em;text-transform:uppercase;opacity:.7}
+  .modal-box p{margin:0;font-size:10px;line-height:1.7;letter-spacing:.05em;opacity:.55}
+  .modal-box textarea{width:100%;min-height:200px;flex:1;resize:vertical;font:inherit;font-size:11px;line-height:1.5;background:rgba(232,226,212,.05);color:inherit;border:1px solid var(--line);border-radius:8px;padding:10px;letter-spacing:0;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default;touch-action:auto;pointer-events:auto;cursor:text}
+  .modal-btns{display:flex;gap:8px; flex-shrink:0}
+  .modal-btns button{flex:1;font:inherit;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--line);padding:11px;border-radius:7px;cursor:pointer;transition:background .15s,color .15s}
+  .modal-btns button.primary{background:var(--ink);color:#0f0c08}
+  .modal-btns button:hover{background:var(--ink);color:#0f0c08}
+  .modal-btns button.primary:hover{opacity:.85}
+  .redeem-input{width:100%;font:inherit;font-size:10px;letter-spacing:.06em;text-transform:uppercase;background:rgba(232,226,212,.05);color:var(--ink);border:1px solid var(--line);padding:10px 12px;border-radius:7px;outline:none}
+  .redeem-input:focus{border-color:var(--ink)}
+  .redeem-input::placeholder{color:rgba(232,226,212,.28)}
+  #redeemStatus{margin-top:8px;font-size:9px;letter-spacing:.10em;opacity:.6}
+  .odds-list{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+  .odds-row{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:rgba(232,226,212,.02)}
+  .odds-head{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+  .odds-name{font-weight:700; letter-spacing:.22em; text-shadow:0 0 8px currentColor}
+  .odds-pct{font-variant-numeric:tabular-nums; letter-spacing:.06em; opacity:.9; font-size:12px}
+  .odds-sub{margin-top:5px;font-size:9.5px;letter-spacing:.10em;opacity:.5;text-transform:uppercase}
+  .odds-bar{height:3px;background:rgba(232,226,212,.10);border-radius:99px;margin-top:7px;overflow:hidden}
+  .odds-bar > div{height:100%;border-radius:99px}
+  .odds-note{margin-top:14px;font-size:9.5px;letter-spacing:.06em;opacity:.45;line-height:1.7}
+  .odds-section-title{margin:10px 0 -4px;font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;opacity:.5}
+  ::-webkit-scrollbar{width:8px}
+  ::-webkit-scrollbar-thumb{background:rgba(232,226,212,.15);border-radius:8px}
+</style>
+</head>
+<body>
+
+<canvas id="cv"></canvas>
+<div class="title">pet mold · culture</div>
+
+<button id="warpBtn" class="warp-btn" aria-label="warp">
+  <span class="icon">⛧</span>
+  <span class="lbl" id="warpLbl">WARP</span>
+</button>
+
+<button id="foodBtn" class="food-btn" aria-label="place food">
+  <span class="icon">✦</span>
+  <span class="lbl" id="foodLbl">PLACE</span>
+</button>
+
+<div class="scoreboard" id="scoreboard">
+  <div class="sb-row"><span class="sb-lbl">rarity</span><span class="sb-val sb-rarity" id="sbRarity">—</span></div>
+  <div class="sb-row" id="sbBoostRow" style="display:none"><span class="sb-lbl">boost</span><span class="sb-val sb-boost" id="sbBoost">×2.4</span></div>
+  <div class="sb-row"><span class="sb-lbl">size</span><span class="sb-val" id="sbSize">1 / 20000</span></div>
+  <div class="sb-row"><span class="sb-lbl">stack</span><span class="sb-val" id="sbStack">0 / 15</span></div>
+  <div class="sb-row"><span class="sb-lbl">food</span><span class="sb-val" id="sbFood">0</span></div>
+  <div class="sb-bar"><div id="sbFill"></div></div>
+  <div class="sb-hint" id="sbHint">arm food button to place</div>
+</div>
+
+<button id="capsuleBtn" class="menu-btn capsule-btn">capsules</button>
+<button id="menuBtn" class="menu-btn">menu</button>
+
+<aside id="panel" class="panel" aria-hidden="true">
+  <div class="panel-head">
+    <span>pet mold</span>
+    <button id="closeBtn" class="icon-btn" aria-label="close">✕</button>
+  </div>
+
+  <section class="sec">
+    <h4>culture</h4>
+    <div class="row"><span>strain</span><span class="val" id="nameVal">—</span></div>
+    <div class="row"><span>rarity</span><span class="val" id="rarityVal">—</span></div>
+    <div class="row"><span>seed</span><span class="val" id="seedVal">—</span></div>
+    <div class="row"><span>size level</span><span class="val" id="lvlVal">—</span></div>
+    <div class="row"><span>hyphae</span><span class="val" id="bioVal">—</span></div>
+    <button id="rerollBtn" class="wide">reroll culture</button>
+    <button id="oddsBtn" class="wide">odds</button>
+  </section>
+
+  <section class="sec">
+    <h4>variant</h4>
+    <div class="row"><span>variant</span><span class="val" id="colorVal">—</span></div>
+    <div class="row"><span>speed</span><span class="val" id="speedVal">—</span></div>
+    <div class="row"><span>roots</span><span class="val" id="rootsVal">—</span></div>
+    <div class="row"><span>behavior</span><span class="val" id="behaviorVal">—</span></div>
+    <div class="row"><span>ability</span><span class="val" id="abilityVal">—</span></div>
+    <div class="row"><span>boost</span><span class="val" id="boostVal">—</span></div>
+  </section>
+
+  <section class="sec">
+    <h4>camera</h4>
+    <button id="camRecenterBtn" class="wide">recenter on mold</button>
+    <button id="camFitBtn" class="wide">fit world</button>
+    <div class="row" style="margin-top:10px"><span>view width</span><span class="val" id="viewVal">—</span></div>
+  </section>
+
+  <section class="sec">
+    <h4>substrate</h4>
+    <div class="foods" id="foods"></div>
+    <div class="row"><span>fullness</span><span class="val" id="fullVal">—</span></div>
+    <div class="meter"><div id="fullBar"></div></div>
+    <div class="row"><span>stack</span><span class="val" id="stackVal">—</span></div>
+    <div class="row"><span>on screen</span><span class="val" id="foodCount">—</span></div>
+    <button id="feedBtn" class="wide">drop food near mold</button>
+  </section>
+
+  <section class="sec">
+    <h4>appearance</h4>
+    <label class="row"><span>monochrome</span><span class="switch"><input type="checkbox" id="optMono"><span class="track"><span class="knob"></span></span></span></label>
+    <label class="row"><span>saturation</span><input type="range" id="optSat" min="0" max="1" step="0.01"></label>
+    <label class="row"><span>density</span><input type="range" id="optFuzz" min="0.4" max="2" step="0.01"></label>
+    <label class="row"><span>wander</span><span class="switch"><input type="checkbox" id="optWander" checked><span class="track"><span class="knob"></span></span></span></label>
+  </section>
+
+  <section class="sec" style="border-bottom:0">
+    <h4>redeem code</h4>
+    <input type="text" id="redeemInput" class="redeem-input" placeholder="ENTER CODE" autocomplete="off" spellcheck="false" autocapitalize="characters">
+    <button id="redeemBtn" class="wide">redeem</button>
+    <p class="note" id="redeemStatus">enter a code to unlock special bonuses</p>
+  </section>
+
+</aside>
+
+<div class="hud">
+  <div style="display:flex;flex-direction:column;gap:4px">
+    <span id="seedEl">seed —</span>
+    <span id="coordEl">— , —</span>
+  </div>
+  <span class="hint">65m world · arm ✦ to place · drag pan · pinch/wheel zoom</span>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<div id="capsuleModal" class="capsule-modal">
+  <div class="capsule-box">
+    <div class="capsule-head">
+      <div>
+        <div class="capsule-head-title">mold capsules · 10 slots</div>
+        <div class="capsule-head-sub">Store full mold cultures here. Capsules stay saved in this browser.</div>
+      </div>
+      <button id="capsuleClose" class="icon-btn" aria-label="close">✕</button>
+    </div>
+    <div id="capsuleGrid" class="capsule-grid"></div>
+    <div class="capsule-footer">
+      <div class="capsule-footer-note">SAVE stores the mold here <b>and downloads a readable .json file</b>. LOAD equips it. CLEAR empties the slot.</div>
+      <div class="capsule-footer-actions">
+        <button id="capsuleImportBtn">load file</button>
+        <button id="capsuleCloseBottom" class="capsule-close">close</button>
+      </div>
+    </div>
+    <input type="file" id="capsuleFileInput" accept=".json,.txt,application/json,text/plain" hidden>
+  </div>
+</div>
+
+<div id="modal" class="modal">
+  <div class="modal-box">
+    <h3 id="modalTitle">culture code</h3>
+    <p id="modalHint">Tap the code to select all, then Copy.</p>
+    <textarea id="moldText" spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+    <div class="modal-btns">
+      <button id="modalCopy" class="primary">copy</button>
+      <button id="modalLoad">load</button>
+      <button id="modalClose">close</button>
+    </div>
+  </div>
+</div>
+
+<div id="oddsModal" class="modal">
+  <div class="modal-box">
+    <h3>reroll odds</h3>
+    <p>Every reroll rolls a rarity, then a starting size inside that rarity's band, plus a behavior.</p>
+    <div class="odds-section-title">rarity (start-size)</div>
+    <div class="odds-list" id="oddsList"></div>
+    <div class="odds-section-title" style="margin-top:16px">behavior</div>
+    <div class="odds-list" id="behaviorOddsList"></div>
+    <p class="odds-note">Redeem codes can stack the odds in your favor.</p>
+    <div class="modal-btns">
+      <button id="oddsClose" class="primary">close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+const TAU = Math.PI * 2;
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const MAX_LEVEL = 20000;
+
+const YHWACH_SEED = -444;
+const YHWACH_SEED_U = (YHWACH_SEED >>> 0);
+const YHWACH_SIZE = 1999;
+
+const WORLD_SIZE = 65000000; // 65,000,000 × 65,000,000 world
+const TERRITORY_SIZE = WORLD_SIZE;
+const TERRITORY_X = 0;
+const TERRITORY_Y = 0;
+
+const WARP_COOLDOWN = 30;
+
+const cam = {
+  wx: WORLD_SIZE/2,
+  wy: WORLD_SIZE/2,
+  viewW: 2000000,
+  follow: true,
+  minView: 300,
+  maxView: 120000000
+};
+
+function mulberry32(a){
+  return function(){
+    a|=0; a=a+0x6D2B79F5|0;
+    let t=Math.imul(a^a>>>15,1|a);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
+}
+function hashHue(seed){
+  let x=(seed>>>0)*2654435761>>>0;
+  x^=x>>>15; x=Math.imul(x,2246822519)>>>0; x^=x>>>13;
+  return x%360;
+}
+function hslToRgb(h,s,l){
+  h=((h%360)+360)%360; h/=360;
+  const a=s*Math.min(l,1-l);
+  const f=n=>{const k=(n+h*12)%12;return l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1)));};
+  return [Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255)];
+}
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+let W=0, H=0, S=0;
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width  = Math.round(W*dpr);
+  cv.height = Math.round(H*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  S  = Math.min(W, H);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function worldToScreen(wx, wy){
+  const s = S / cam.viewW;
+  return { x: W/2 + (wx - cam.wx) * s, y: H/2 + (wy - cam.wy) * s, scale: s };
+}
+function screenToWorld(sx, sy){
+  const s = S / cam.viewW;
+  return { x: cam.wx + (sx - W/2) / s, y: cam.wy + (sy - H/2) / s };
+}
+function localToWorld(lx, ly){
+  return { x: lx * TERRITORY_SIZE, y: ly * TERRITORY_SIZE };
+}
+function worldToLocal(wx, wy){
+  return { x: wx / TERRITORY_SIZE, y: wy / TERRITORY_SIZE };
+}
+
+const RARITIES = [
+  { name:'COMMON',     weight:54.90, startMin:    1, startMax: 1000,  color:'#b8b8b8' },
+  { name:'UNCOMMON',   weight:25.00, startMin:  500, startMax: 2500,  color:'#6ec96e' },
+  { name:'RARE',       weight:12.00, startMin: 1500, startMax: 4500,  color:'#5aa6ff' },
+  { name:'EPIC',       weight: 5.00, startMin: 3000, startMax: 6500,  color:'#b96eff' },
+  { name:'LEGENDARY',  weight: 2.00, startMin: 5000, startMax: 8000,  color:'#ffb84a' },
+  { name:'MYTHICAL',   weight: 0.80, startMin: 7000, startMax:10500,  color:'#ff5cd6' },
+  { name:'DIVINE',     weight: 0.15, startMin: 8500, startMax:12500,  color:'#ffe95c' },
+  { name:'CELESTIAL',  weight: 0.04, startMin:10500, startMax:15000,  color:'#6effff' },
+  { name:'ABYSSAL',    weight: 0.01, startMin:13500, startMax:19000,  color:'#ff0033' },
+  { name:'GARGANTUAN', weight: 0.10, startMin:18000, startMax:19999,  color:'#ff7bff' },
+  { name:'NULL',       weight: 0.00, startMin:YHWACH_SIZE, startMax:YHWACH_SIZE, color:'#8a00ff', special:true }
+];
+const RARITY_BY_NAME = Object.fromEntries(RARITIES.map(r => [r.name, r]));
+const RARITY_TOTAL_WEIGHT = RARITIES.reduce((a,r) => a + r.weight, 0);
+
+function rollRarity(){
+  let roll = Math.random() * RARITY_TOTAL_WEIGHT;
+  for (const r of RARITIES){
+    roll -= r.weight;
+    if (roll <= 0) return r;
+  }
+  return RARITIES[0];
+}
+function rollStartSize(rarity){
+  return Math.floor(rarity.startMin + Math.random() * (rarity.startMax - rarity.startMin + 1));
+}
+
+const BEHAVIORS = [
+  { name:'normal',      weight:30, label:'normal',         color:'#e8e2d4' },
+  { name:'fast',        weight:18, label:'fast eater',     color:'#c8f07a' },
+  { name:'slow',        weight:18, label:'slow eater',     color:'#9bb0c0' },
+  { name:'dumb',        weight:12, label:'dumb',           color:'#c0a080' },
+  { name:'smart',       weight:12, label:'smart',          color:'#88d0ff' },
+  { name:'flaming',     weight: 4, label:'flaming',        color:'#ff9a3a' },
+  { name:'acid',        weight: 4, label:'acidic',         color:'#7aff3a' },
+  { name:'lightning',   weight: 2, label:'lightning',      color:'#ffff5a' },
+  { name:'aggressive',  weight: 4, label:'aggressive',     color:'#ff4d5e' },
+  { name:'greedy',      weight: 3, label:'greedy',         color:'#ffd24d' },
+  { name:'shy',         weight: 3, label:'shy',            color:'#b7a6ff' },
+  { name:'chaotic',     weight: 3, label:'chaotic',        color:'#ff72d0' },
+  { name:'hunter',      weight: 2, label:'hunter',         color:'#ff7f36' },
+  { name:'lazy',        weight: 2, label:'lazy',           color:'#8fa2aa' },
+  { name:'gluttonous',  weight: 2, label:'gluttonous',     color:'#f0a83a' },
+  { name:'nomadic',     weight: 2, label:'nomadic',        color:'#6ed8ff' },
+  { name:'territorial', weight: 2, label:'territorial',    color:'#72ff9b' },
+  { name:'swarm',       weight: 2, label:'swarm',          color:'#d6ff5a' },
+  { name:'magnetic',    weight: 2, label:'magnetic',       color:'#7ac7ff' },
+  { name:'volatile',    weight: 1, label:'volatile',       color:'#ff9cde' }
+];
+const BEHAVIOR_TOTAL_WEIGHT = BEHAVIORS.reduce((a,b) => a + b.weight, 0);
+const BEHAVIOR_BY_NAME = Object.fromEntries(BEHAVIORS.map(b => [b.name, b]));
+BEHAVIOR_BY_NAME['yhwach'] = { name:'yhwach', weight:0, label:'THE ALMIGHTY', color:'#8a00ff' };
+
+function rollBehavior(){
+  let r = Math.random() * BEHAVIOR_TOTAL_WEIGHT;
+  for (const b of BEHAVIORS){
+    r -= b.weight;
+    if (r <= 0) return b;
+  }
+  return BEHAVIORS[0];
+}
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  38 NAMED MOLD VARIANTS                                             */
+/* ══════════════════════════════════════════════════════════════════ */
+const VARIANT_PALETTE = [
+  { name:'Lime',      hue: 75, speed:1.02, thick:1.00 },
+  { name:'Chartreuse',hue: 92, speed:1.10, thick:0.92 },
+  { name:'Moss',      hue:105, speed:0.82, thick:1.15 },
+  { name:'Fern',      hue:120, speed:0.94, thick:1.08 },
+  { name:'Emerald',   hue:145, speed:1.16, thick:1.20 },
+  { name:'Jade',      hue:160, speed:1.06, thick:0.96 },
+  { name:'Teal',      hue:178, speed:0.88, thick:1.10 },
+  { name:'Cyan',      hue:190, speed:1.28, thick:0.84 },
+  { name:'Sky',       hue:205, speed:1.14, thick:0.78 },
+  { name:'Azure',     hue:220, speed:1.06, thick:1.02 },
+  { name:'Cobalt',    hue:232, speed:1.20, thick:1.16 },
+  { name:'Indigo',    hue:245, speed:0.80, thick:1.24 },
+  { name:'Violet',    hue:265, speed:1.18, thick:1.06 },
+  { name:'Orchid',    hue:288, speed:1.00, thick:0.92 },
+  { name:'Magenta',   hue:315, speed:1.32, thick:1.00 },
+  { name:'Rose',      hue:335, speed:1.08, thick:1.04 },
+  { name:'Crimson',   hue:  5, speed:1.24, thick:1.22 },
+  { name:'Coral',     hue: 16, speed:1.12, thick:0.90 },
+  { name:'Amber',     hue: 38, speed:0.98, thick:1.18 },
+  { name:'Honey',     hue: 52, speed:0.90, thick:1.12 },
+  { name:'Toxic',     hue: 96, speed:1.36, thick:1.28 },
+  { name:'Neon',      hue:145, speed:1.50, thick:0.72 },
+  { name:'Frost',     hue:195, speed:0.72, thick:0.76 },
+  { name:'Glacier',   hue:210, speed:0.78, thick:1.18 },
+  { name:'Aurora',    hue:185, speed:1.26, thick:1.05 },
+  { name:'Plasma',    hue:275, speed:1.46, thick:0.88 },
+  { name:'Solar',     hue: 48, speed:1.34, thick:1.14 },
+  { name:'Ember',     hue: 22, speed:1.40, thick:1.22 },
+  { name:'Inferno',   hue: 10, speed:1.58, thick:1.34 },
+  { name:'Oceanic',   hue:190, speed:0.86, thick:1.30 },
+  { name:'Abyss',     hue:280, speed:0.74, thick:1.42 },
+  { name:'Obsidian',  hue:260, speed:0.68, thick:1.48 },
+  { name:'Pearl',     hue:200, speed:0.82, thick:0.80 },
+  { name:'Gold',      hue: 45, speed:1.22, thick:1.32 },
+  { name:'Silver',    hue:215, speed:0.98, thick:0.74 },
+  { name:'Electric',  hue:205, speed:1.62, thick:0.70 },
+  { name:'Prism',     hue:300, speed:1.16, thick:0.98 },
+  { name:'Ghost',     hue:215, speed:0.62, thick:1.00 }
+];
+
+function makeVariant(s){
+  const r = mulberry32((s ^ 0xA5F1C3D7) >>> 0);
+  const base = VARIANT_PALETTE[Math.floor(r() * VARIANT_PALETTE.length)];
+  const speedMul = clamp(base.speed + (r() - 0.5) * 0.16, 0.55, 1.80);
+  const thicknessMul = clamp(base.thick + (r() - 0.5) * 0.18, 0.55, 1.70);
+  const hueJitter = (r() - 0.5) * 12;
+
+  let speedLabel;
+  if (speedMul < 0.75)      speedLabel = 'slow';
+  else if (speedMul < 1.15) speedLabel = 'steady';
+  else if (speedMul < 1.50) speedLabel = 'quick';
+  else                      speedLabel = 'blazing';
+
+  let rootsLabel;
+  if (thicknessMul < 0.75)      rootsLabel = 'thin';
+  else if (thicknessMul < 1.15) rootsLabel = 'normal';
+  else if (thicknessMul < 1.55) rootsLabel = 'thick';
+  else                          rootsLabel = 'chunky';
+
+  return {
+    speedMul, thicknessMul,
+    hueBase: base.hue + hueJitter,
+    hueName: base.name,
+    speedLabel, rootsLabel
+  };
+}
+
+const REDEEM_CODES = {
+  'MOLDYSITE-BETA': { type:'boost', multiplier: 2.4, msg:'code accepted — ×2.4 growth unlocked' }
+};
+const YHWACH_CODE = 'HSGDUSHS-SHSUDGAJS-SECSHDYW-CURE-UHSIS-ALM';
+
+const GW = 250, GH = 250;
+const GA = new Float32Array(GW*GH);
+const GB = new Float32Array(GW*GH);
+let grid = GA, gridTmp = GB;
+const permGrid = new Float32Array(GW*GH);
+
+const agents = [];
+function spawnAgent(x, y, a, offset){
+  agents.push({ x, y, angle: a, boundOffset: offset !== undefined ? offset : (0.85 + Math.random()*0.30) });
+}
+function clearAgents(){ agents.length = 0; }
+
+const effects = [];
+function spawnDrip(x, y, voidLike){
+  effects.push({ type:'drip', x, y, vx:(Math.random()-0.5)*0.005, vy:0.05 + Math.random()*0.04,
+    size: 1.4 + Math.random()*1.4, life: 1.0, maxLife: 1.0, voidLike: !!voidLike });
+}
+function spawnWarpRipple(x, y){
+  effects.push({ type:'warp', x, y, life: 0.7, maxLife: 0.7 });
+}
+
+let yhwachEyes = [];
+function initYhwachEyes(){
+  yhwachEyes = [];
+  const r = mulberry32(0xBEEFBEEF);
+  const n = 90;
+  for (let i = 0; i < n; i++){
+    const a = r() * TAU;
+    const rad = Math.sqrt(r()) * 0.88;
+    yhwachEyes.push({
+      ox: Math.cos(a) * rad,
+      oy: Math.sin(a) * rad,
+      size: 1.3 + r() * 2.0,
+      blinkTimer: r() * 6,
+      blinkPhase: 0,
+      lookX: 0, lookY: 0,
+      phase: r() * TAU
+    });
+  }
+}
+function updateYhwachEyes(dt, t){
+  if (!yhwachEyes.length) return;
+  let nearestF = null, nearestD = 999;
+  for (const f of foods){
+    const d = Math.hypot(f.lx - moldCenter.x, f.ly - moldCenter.y);
+    if (d < nearestD){ nearestD = d; nearestF = f; }
+  }
+  for (const e of yhwachEyes){
+    e.blinkTimer -= dt;
+    if (e.blinkTimer <= 0){
+      e.blinkTimer = 1.2 + Math.random() * 4;
+      e.blinkPhase = 0.001;
+    }
+    if (e.blinkPhase > 0){
+      e.blinkPhase += dt * 7;
+      if (e.blinkPhase >= 1) e.blinkPhase = 0;
+    }
+    if (nearestF){
+      const dx = nearestF.lx - moldCenter.x;
+      const dy = nearestF.ly - moldCenter.y;
+      const d = Math.hypot(dx, dy) || 1;
+      e.lookX = dx / d;
+      e.lookY = dy / d;
+    } else {
+      e.lookX = Math.sin(t * 0.5 + e.phase) * 0.6;
+      e.lookY = Math.cos(t * 0.6 + e.phase) * 0.6;
+    }
+  }
+}
+function drawYhwachEyes(){
+  const world = localToWorld(moldCenter.x, moldCenter.y);
+  const sp = worldToScreen(world.x, world.y);
+  const R = baseR() * TERRITORY_SIZE * (S / cam.viewW);
+  const zoomScale = Math.max(0.6, Math.min(3.2, 2000000 / cam.viewW));
+
+  for (const e of yhwachEyes){
+    const ex = sp.x + e.ox * R;
+    const ey = sp.y + e.oy * R;
+    const es = e.size * zoomScale;
+    const blinkAmt = e.blinkPhase > 0 ? Math.sin(e.blinkPhase * Math.PI) : 0;
+    const openH = Math.max(0.15, 1 - blinkAmt * 0.92);
+
+    ctx.fillStyle = 'rgba(4,0,8,0.95)';
+    ctx.beginPath();
+    ctx.arc(ex, ey, es, 0, TAU);
+    ctx.fill();
+
+    if (openH > 0.35){
+      const px = ex + e.lookX * es * 0.35;
+      const py = ey + e.lookY * es * 0.35;
+      const pr = es * 0.52;
+      ctx.fillStyle = '#ff1a3a';
+      ctx.shadowColor = '#ff0033';
+      ctx.shadowBlur = 4 * zoomScale;
+      ctx.beginPath();
+      ctx.ellipse(px, py, pr, pr * openH, 0, 0, TAU);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,200,200,0.85)';
+      ctx.beginPath();
+      ctx.arc(px - pr * 0.35, py - pr * 0.35, pr * 0.28, 0, TAU);
+      ctx.fill();
+    }
+  }
+}
+
+const MAX_STACK = 15;
+const state = {
+  fullness: 0.0, stack: 0, sizeLevel: 1, maxLevel: MAX_LEVEL,
+  rarity: 'COMMON', behavior: 'normal', forcedBehavior: null,
+  fed: 0, food: 'oats', boostMultiplier: 1, redeemedCodes: [],
+  settings: { monochrome: false, saturation: 0.85, density: 1.0, wander: true }
+};
+
+let seed = 0;
+let strainName = '';
+let params = null;
+let variant = null;
+let moldRGB = [200, 212, 58];
+let driedRGB = [120, 110, 60];
+let bgRGB = [15, 12, 8];
+let AGENT_SPEED = 1 / GW;
+
+let moldCenter = { x: 0.5, y: 0.5 };
+let driftVel   = { x: 0, y: 0 };
+let targetVel  = { x: 0, y: 0 };
+let nextTurnTime = 0;
+
+let yhwachSpread = 0;
+let warpArmed = false;
+let warpCooldown = 0;
+let spawnSlowTimer = 0;
+let placeFoodArmed = false;
+
+/* ability runtime */
+let abilityTimer = 0;
+let abilityPulse = 0;
+
+let levelFlash = 0;
+const t0 = performance.now();
+let lastTime = t0;
+let frameCount = 0;
+
+function makeParams(s){
+  const r = mulberry32(s);
+  return {
+    turn:        0.42 + r()*0.24,
+    sensorAngle: 0.32 + r()*0.22,
+    sensorDist:  0.030 + r()*0.014,
+    decay:       0.905 + r()*0.030,
+    deposit:     0.05 + r()*0.05,
+    wander:      0.05 + r()*0.09,
+    stickChance: 0.0012 + r()*0.0016,
+    wanderTime:  2.5 + r()*4.0
+  };
+}
+
+const SYL_A=['my','ph','sp','cl','rho','gl','zy','bo','nu','la','cor','phy','tra','os','fu'];
+const SYL_B=['spor','myc','cel','ium','osa','ella','odon','phyta','bius','mora','nema','gaster','ceps','porus'];
+function makeName(s){
+  const r = mulberry32((s ^ 0x9e3779b9) >>> 0);
+  return SYL_A[Math.floor(r()*SYL_A.length)] + SYL_B[Math.floor(r()*SYL_B.length)];
+}
+
+function refreshPalette(){
+  if (state.behavior === 'yhwach'){
+    moldRGB  = [18, 6, 30];
+    driedRGB = [55, 20, 90];
+    bgRGB    = [3, 1, 6];
+    document.documentElement.style.setProperty('--mold', 'rgb(140,40,220)');
+    document.body.style.background = 'rgb(3,1,6)';
+    return;
+  }
+  const sat = state.settings.monochrome ? 0.0 : state.settings.saturation;
+  const h = variant.hueBase;
+
+  moldRGB  = hslToRgb(h,       sat * 0.85, state.settings.monochrome ? 0.70 : 0.55);
+  driedRGB = hslToRgb(h + 18,  sat * 0.35, state.settings.monochrome ? 0.55 : 0.34);
+  bgRGB    = hslToRgb(h + 180, 0.20,       0.055);
+
+  document.documentElement.style.setProperty('--mold',
+    `rgb(${moldRGB[0]},${moldRGB[1]},${moldRGB[2]})`);
+  document.body.style.background = `rgb(${bgRGB[0]},${bgRGB[1]},${bgRGB[2]})`;
+}
+
+function levelT(){ return (state.sizeLevel - 1) / (state.maxLevel - 1); }
+function baseR(){
+  if (state.behavior === 'yhwach'){
+    return Math.min(0.15, 0.06 + yhwachSpread * 0.0008);
+  }
+  if (state.rarity === 'GARGANTUAN'){
+    return 0.07 + 0.17 * levelT();
+  }
+  return 0.04 + 0.08 * levelT();
+}
+function boundaryR(theta, t){
+  const base = baseR();
+  const wob =
+    Math.sin(theta*3 + t*0.55 + seed*0.0007) * 0.14 +
+    Math.sin(theta*5 - t*0.42 + seed*0.0011) * 0.09 +
+    Math.sin(theta*7 + t*0.71 + seed*0.0019) * 0.05;
+  return base * (1 + wob);
+}
+function targetAgentCount(){
+  const t = levelT();
+  if (state.behavior === 'yhwach'){
+    return Math.floor(1200 + yhwachSpread * 20) * state.settings.density;
+  }
+  return Math.floor(80 + Math.pow(t, 1.35) * 3200) * state.settings.density;
+}
+
+function behaviorMods(){
+  switch (state.behavior){
+    case 'fast':        return { biteCdMul:0.35, biteMul:1.5, senseMul:1.0, turnMul:1.0,  seekStrength:0.14, speedMul:1.25, depositMul:1.00 };
+    case 'slow':        return { biteCdMul:2.20, biteMul:0.5, senseMul:1.0, turnMul:1.0,  seekStrength:0.14, speedMul:0.62, depositMul:1.00 };
+    case 'dumb':        return { biteCdMul:1.00, biteMul:1.0, senseMul:0.6, turnMul:1.7,  seekStrength:0.04, speedMul:0.95, depositMul:1.00 };
+    case 'smart':       return { biteCdMul:0.75, biteMul:1.2, senseMul:1.5, turnMul:0.75, seekStrength:0.30, speedMul:1.05, depositMul:1.10 };
+    case 'flaming':     return { biteCdMul:0.55, biteMul:0.85,senseMul:1.1, turnMul:0.95, seekStrength:0.18, speedMul:1.08, depositMul:1.05 };
+    case 'acid':        return { biteCdMul:0.15, biteMul:1.6, senseMul:1.0, turnMul:1.0,  seekStrength:0.20, speedMul:1.12, depositMul:1.30 };
+    case 'lightning':   return { biteCdMul:1.00, biteMul:1.0, senseMul:0.5, turnMul:0.03, seekStrength:0.00, speedMul:1.45, depositMul:0.85 };
+    case 'aggressive':  return { biteCdMul:0.55, biteMul:1.35,senseMul:1.4, turnMul:0.85, seekStrength:0.34, speedMul:1.22, depositMul:1.15 };
+    case 'greedy':      return { biteCdMul:0.80, biteMul:2.10,senseMul:1.8, turnMul:0.70, seekStrength:0.58, speedMul:1.08, depositMul:1.05 };
+    case 'shy':         return { biteCdMul:1.40, biteMul:0.85,senseMul:0.8, turnMul:1.15, seekStrength:-0.30,speedMul:0.86, depositMul:0.90 };
+    case 'chaotic':     return { biteCdMul:0.85, biteMul:1.0, senseMul:0.85,turnMul:3.2,  seekStrength:0.08, speedMul:1.30, depositMul:0.95 };
+    case 'hunter':      return { biteCdMul:0.65, biteMul:1.55,senseMul:2.6, turnMul:0.55, seekStrength:0.80, speedMul:1.18, depositMul:1.00 };
+    case 'lazy':        return { biteCdMul:2.80, biteMul:0.75,senseMul:0.7, turnMul:1.6,  seekStrength:0.05, speedMul:0.48, depositMul:0.80 };
+    case 'gluttonous':  return { biteCdMul:0.95, biteMul:2.80,senseMul:1.25,turnMul:1.05, seekStrength:0.24, speedMul:0.82, depositMul:1.25 };
+    case 'nomadic':     return { biteCdMul:1.25, biteMul:0.95,senseMul:0.9, turnMul:0.60, seekStrength:0.02, speedMul:1.40, depositMul:0.55 };
+    case 'territorial': return { biteCdMul:0.90, biteMul:1.15,senseMul:1.1, turnMul:0.65, seekStrength:0.12, speedMul:0.92, depositMul:1.45 };
+    case 'swarm':       return { biteCdMul:0.75, biteMul:1.1, senseMul:1.7, turnMul:0.80, seekStrength:0.40, speedMul:0.98, depositMul:1.80 };
+    case 'magnetic':    return { biteCdMul:0.90, biteMul:1.25,senseMul:3.0, turnMul:0.40, seekStrength:0.95, speedMul:1.02, depositMul:0.90 };
+    case 'volatile':    return { biteCdMul:0.65, biteMul:1.45,senseMul:1.0, turnMul:2.5,  seekStrength:0.18, speedMul:1.15, depositMul:1.15 };
+    case 'yhwach':      return { biteCdMul:0.55, biteMul:1.3, senseMul:1.6, turnMul:0.95, seekStrength:0.22, speedMul:1.00, depositMul:2.40 };
+    default:            return { biteCdMul:1.00, biteMul:1.0, senseMul:1.0, turnMul:1.0,  seekStrength:0.14, speedMul:1.00, depositMul:1.00 };
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  RARITY ABILITIES — MYTHICAL through GARGANTUAN                        */
+/* ══════════════════════════════════════════════════════════════════ */
+const ABILITIES = {
+  'MYTHICAL':   { name:'Feast',          desc:'passive fullness trickle' },
+  'DIVINE':     { name:'Blessing',       desc:'food drifts toward the mold' },
+  'CELESTIAL':  { name:'Manifest',       desc:'periodically spawns free food' },
+  'ABYSSAL':    { name:'Void Hunger',    desc:'drains all food anywhere' },
+  'GARGANTUAN': { name:'Titan Growth',   desc:'maximum growth potential' }
+};
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  12 FOODS                                                           */
+/* ══════════════════════════════════════════════════════════════════ */
+const FOODS = {
+  oats:   { name:'Oats',     nutrition:30, chipColor:'#d9b06a' },
+  rice:   { name:'Wet Rice', nutrition:25, chipColor:'#f0ead8' },
+  bread:  { name:'Bread',    nutrition:35, chipColor:'#a8763f' },
+  sugar:  { name:'Sugar',    nutrition:40, chipColor:'#e8eef5' },
+  fruit:  { name:'Fruit',    nutrition:45, chipColor:'#e34b6a' },
+  veggie: { name:'Veggies',  nutrition:38, chipColor:'#5cc45c' },
+  leaves: { name:'Leaves',   nutrition:22, chipColor:'#8a6a3a' },
+  cheese: { name:'Cheese',   nutrition:42, chipColor:'#f4d35e' },
+  honey:  { name:'Honey',    nutrition:50, chipColor:'#e8a838' },
+  yogurt: { name:'Yogurt',   nutrition:35, chipColor:'#f0efe8' },
+  wood:   { name:'Wood',     nutrition:18, chipColor:'#7a5a3a' },
+  coffee: { name:'Coffee',   nutrition:28, chipColor:'#3a2418' }
+};
+const FRUITS = ['strawberry','banana','apple','dragonfruit','avocado'];
+const VEGGIES = ['broccoli','carrot','tomato','potato','corn'];
+const foods = [];
+
+function dropFoodLocal(lx, ly, type){
+  const f = FOODS[type];
+  if (!f) return;
+  let sprite;
+  if (type === 'fruit') sprite = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+  else if (type === 'veggie') sprite = VEGGIES[Math.floor(Math.random() * VEGGIES.length)];
+  else sprite = type;
+  foods.push({
+    lx, ly,
+    type, sprite,
+    amount: f.nutrition, maxAmount: f.nutrition,
+    angle: Math.random() * TAU, wobble: Math.random() * TAU,
+    biteCooldown: 0
+  });
+  updateFoodCount(); updateScoreboard();
+}
+
+function seedCenter(){
+  clearAgents();
+  grid.fill(0); gridTmp.fill(0); permGrid.fill(0);
+  foods.length = 0; effects.length = 0;
+
+  moldCenter.x = 0.5; moldCenter.y = 0.5;
+  driftVel.x = 0; driftVel.y = 0;
+  targetVel.x = 0; targetVel.y = 0;
+  nextTurnTime = 1.5 + Math.random() * 1.5;
+  yhwachSpread = 0;
+  warpArmed = false;
+  warpCooldown = 0;
+  abilityTimer = 0;
+  abilityPulse = 0;
+
+  const cx = GW/2 | 0, cy = GH/2 | 0;
+  const seedRadius = state.behavior === 'yhwach' ? 8 : (4 + Math.floor(levelT() * 8));
+  for (let dy = -seedRadius; dy <= seedRadius; dy++){
+    for (let dx = -seedRadius; dx <= seedRadius; dx++){
+      const d2 = dx*dx + dy*dy;
+      if (d2 > seedRadius*seedRadius) continue;
+      const gx = cx + dx, gy = cy + dy;
+      if (gx < 0 || gx >= GW || gy < 0 || gy >= GH) continue;
+      grid[gy*GW + gx] = 0.8 * (1 - Math.sqrt(d2)/seedRadius);
+    }
+  }
+
+  const n = targetAgentCount();
+  for (let i = 0; i < n; i++){
+    const posA = Math.random() * TAU;
+    const posR = Math.random() * 0.02;
+    spawnAgent(0.5 + Math.cos(posA)*posR, 0.5 + Math.sin(posA)*posR, Math.random() * TAU);
+  }
+  updateFoodCount();
+}
+
+function addAgentsFrontier(n){
+  const t = (performance.now() - t0) / 1000;
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * TAU;
+    const r = boundaryR(a, t) * (0.55 + Math.random() * 0.45);
+    spawnAgent(
+      moldCenter.x + Math.cos(a)*r,
+      moldCenter.y + Math.sin(a)*r,
+      a + (Math.random() - 0.5) * 0.5
+    );
+  }
+}
+
+function addFullness(raw){
+  state.fullness += raw * state.boostMultiplier;
+  while (state.fullness >= 1){
+    state.fullness -= 1;
+    state.stack++;
+    if (state.stack >= MAX_STACK){
+      state.stack = 0;
+      if (state.sizeLevel < state.maxLevel){
+        state.sizeLevel++;
+        levelFlash = 1;
+        const tgt = targetAgentCount();
+        const room = Math.max(0, tgt - agents.length);
+        if (room > 0) addAgentsFrontier(room);
+        for (let k = 0; k < GW*GH; k++){
+          if (grid[k] > 0.15) grid[k] *= 1.7;
+        }
+        toast('size up — level ' + state.sizeLevel + ' / ' + state.maxLevel, 2000);
+        bumpScoreboard(true);
+      } else {
+        bumpScoreboard(false);
+      }
+      updateScoreboard();
+    }
+  }
+  updateMeter();
+}
+
+function newCulture(s, name, preset){
+  seed = (s === undefined) ? Math.floor(Math.random()*1e9) : (s>>>0);
+
+  if (preset && preset.rarity && RARITY_BY_NAME[preset.rarity]){
+    state.rarity = preset.rarity;
+  } else {
+    state.rarity = rollRarity().name;
+  }
+
+  if (state.forcedBehavior && BEHAVIOR_BY_NAME[state.forcedBehavior]){
+    state.behavior = state.forcedBehavior;
+    state.forcedBehavior = null;
+  } else if (preset && preset.behavior && BEHAVIOR_BY_NAME[preset.behavior]){
+    state.behavior = preset.behavior;
+  } else {
+    state.behavior = rollBehavior().name;
+  }
+
+  if (state.rarity === 'NULL'){
+    state.behavior = 'yhwach';
+    state.maxLevel = YHWACH_SIZE;
+    state.sizeLevel = YHWACH_SIZE;
+  } else if (preset && typeof preset.sizeLevel === 'number'){
+    state.maxLevel = MAX_LEVEL;
+    state.sizeLevel = clamp(Math.floor(preset.sizeLevel), 1, MAX_LEVEL);
+  } else {
+    state.maxLevel = MAX_LEVEL;
+    state.sizeLevel = rollStartSize(RARITY_BY_NAME[state.rarity]);
+    state.stack = 0;
+    state.fullness = 0;
+  }
+
+  if (state.behavior === 'yhwach'){
+    state.maxLevel = YHWACH_SIZE;
+    if (!preset) state.sizeLevel = YHWACH_SIZE;
+    state.rarity = 'NULL';
+  }
+
+  variant = makeVariant(seed);
+  AGENT_SPEED = (1 / GW) * variant.speedMul;
+
+  if (state.behavior === 'yhwach'){
+    variant.thicknessMul = 3.0;
+    variant.speedMul     = 2.2;
+    variant.hueBase = 275;
+    variant.hueName = 'void';
+    variant.speedLabel = 'blazing';
+    variant.rootsLabel = 'chunky';
+    AGENT_SPEED = (1 / GW) * variant.speedMul;
+    initYhwachEyes();
+  } else if (state.behavior === 'flaming'){
+    variant.hueBase = 22; variant.hueName = 'flaming';
+  } else if (state.behavior === 'acid'){
+    variant.hueBase = 100; variant.hueName = 'acidic';
+  } else if (state.behavior === 'lightning'){
+    variant.hueBase = 52; variant.hueName = 'lightning';
+  }
+
+  state.boostMultiplier = state.redeemedCodes.length > 0 ? 2.4 : 1;
+
+  strainName = name || makeName(seed);
+  params = makeParams(seed);
+  refreshPalette();
+  levelFlash = 0;
+
+  spawnSlowTimer = (state.sizeLevel >= 1 && state.sizeLevel <= 400) ? 5 : 0;
+
+  /* ability runtime reset */
+  abilityTimer = 0;
+  abilityPulse = 0;
+
+  seedCenter();
+
+  cam.wx = WORLD_SIZE/2;
+  cam.wy = WORLD_SIZE/2;
+  cam.viewW = 2000000;
+  cam.follow = true;
+
+  /* ability intro toast */
+  const abil = ABILITIES[state.rarity];
+  if (abil){
+    setTimeout(() => toast('✦ ' + abil.name + ' — ' + abil.desc, 2600), 700);
+  }
+
+  if (!preset){
+    const beh = BEHAVIOR_BY_NAME[state.behavior];
+    if (state.behavior === 'yhwach'){
+      toast('⛧ THE ALMIGHTY ⛧', 4000);
+    } else if (state.behavior === 'lightning'){
+      toast('⚡ LIGHTNING ⚡ ' + state.sizeLevel + '/20000', 4000);
+    } else if (state.behavior === 'acid'){
+      toast('☣ ACIDIC ☣ ' + state.sizeLevel + '/20000', 3600);
+    } else if (state.behavior === 'flaming'){
+      toast('🔥 FLAMING 🔥 ' + state.sizeLevel + '/20000', 3600);
+    } else if (state.rarity === 'ABYSSAL'){
+      toast('⛧ ABYSSAL ⛧ ' + state.sizeLevel + '/20000 · ' + beh.label, 4200);
+    } else if (state.rarity === 'CELESTIAL'){
+      toast('✦ CELESTIAL ✦ ' + state.sizeLevel + '/20000', 3800);
+    } else if (state.rarity === 'DIVINE'){
+      toast('✧ DIVINE ✧ ' + state.sizeLevel + '/20000', 3400);
+    } else if (state.rarity === 'GARGANTUAN'){
+      toast('☄ GARGANTUAN ☄ ' + state.sizeLevel + '/20000', 5200);
+    } else if (state.rarity === 'MYTHICAL'){
+      toast('✦ MYTHICAL ✦ ' + state.sizeLevel + '/20000', 3200);
+    } else if (state.rarity === 'LEGENDARY'){
+      toast('★ LEGENDARY ★ ' + state.sizeLevel + '/20000', 2800);
+    } else if (state.rarity === 'EPIC'){
+      toast('EPIC — ' + state.sizeLevel + '/20000', 2400);
+    } else if (state.rarity === 'RARE'){
+      toast('RARE — ' + state.sizeLevel + '/20000', 2200);
+    } else {
+      toast(state.rarity.toLowerCase() + ' — ' + state.sizeLevel + '/20000 · ' + beh.label, 2000);
+    }
+    if (spawnSlowTimer > 0) toast('warming up…', 1200);
+  }
+
+  updateWarpUI();
+  updateFoodBtnUI();
+  syncUI();
+}
+
+function pickNewDirection(){
+  const a = Math.random() * TAU;
+  const speed = 0.012 + Math.random() * 0.020;
+  targetVel.x = Math.cos(a) * speed;
+  targetVel.y = Math.sin(a) * speed;
+}
+
+function updateDrift(dt, t){
+  let target = null, bestD = 0.65;
+  for (const f of foods){
+    const d = Math.hypot(f.lx - moldCenter.x, f.ly - moldCenter.y);
+    if (d < bestD){ bestD = d; target = f; }
+  }
+
+  if (target && state.settings.wander){
+    const dx = target.lx - moldCenter.x;
+    const dy = target.ly - moldCenter.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const speed = Math.min(0.055, 0.010 + d * 0.10);
+    targetVel.x = (dx/d) * speed;
+    targetVel.y = (dy/d) * speed;
+    if (d < baseR() * 0.55){ targetVel.x = 0; targetVel.y = 0; }
+  } else if (!state.settings.wander){
+    targetVel.x = 0; targetVel.y = 0;
+  } else if (t > nextTurnTime){
+    pickNewDirection();
+    nextTurnTime = t + params.wanderTime * (0.6 + Math.random() * 0.9);
+  }
+
+  const k = Math.min(1, dt * 1.5);
+  driftVel.x += (targetVel.x - driftVel.x) * k;
+  driftVel.y += (targetVel.y - driftVel.y) * k;
+
+  moldCenter.x += driftVel.x * dt;
+  moldCenter.y += driftVel.y * dt;
+
+  const pad = 0.002;
+  moldCenter.x = clamp(moldCenter.x, pad, 1 - pad);
+  moldCenter.y = clamp(moldCenter.y, pad, 1 - pad);
+
+  if (cam.follow){
+    const world = localToWorld(moldCenter.x, moldCenter.y);
+    cam.wx += (world.x - cam.wx) * Math.min(1, dt * 2.5);
+    cam.wy += (world.y - cam.wy) * Math.min(1, dt * 2.5);
+  }
+}
+
+function sampleP(x, y){
+  if (x < 0 || x >= 1 || y < 0 || y >= 1) return 0;
+  const gx = (x * GW) | 0;
+  const gy = (y * GH) | 0;
+  return grid[gy * GW + gx];
+}
+
+function stepAgent(a, t){
+  const lv = levelT();
+  const mods = behaviorMods();
+  const isYhwach = state.behavior === 'yhwach';
+
+  const SA  = params.sensorAngle;
+  const SD  = params.sensorDist * (1 + lv * 0.55) * mods.senseMul;
+  const TRN = params.turn * (1 - lv * 0.18) * mods.turnMul;
+  const WND = params.wander;
+
+  const slowMul = spawnSlowTimer > 0 ? 0.22 : 1;
+
+  const ca = Math.cos(a.angle), sa = Math.sin(a.angle);
+  const sL = sampleP(a.x + Math.cos(a.angle - SA)*SD, a.y + Math.sin(a.angle - SA)*SD);
+  const sF = sampleP(a.x + ca*SD,                     a.y + sa*SD);
+  const sR = sampleP(a.x + Math.cos(a.angle + SA)*SD, a.y + Math.sin(a.angle + SA)*SD);
+
+  if (sF >= sL && sF >= sR){
+    a.angle += (Math.random() - 0.5) * WND;
+  } else if (sL > sR){
+    a.angle -= TRN * (0.55 + Math.random() * 0.45);
+  } else if (sR > sL){
+    a.angle += TRN * (0.55 + Math.random() * 0.45);
+  } else {
+    a.angle += (Math.random() - 0.5) * TRN;
+  }
+
+  let nearFood = null, nearD = (isYhwach || mods.senseMul > 2.0) ? 0.42 : 0.18;
+  for (const f of foods){
+    const d = Math.hypot(f.lx - a.x, f.ly - a.y);
+    if (d < nearD){ nearD = d; nearFood = f; }
+  }
+
+  if (mods.seekStrength !== 0 && nearFood){
+    const dx = nearFood.lx - a.x;
+    const dy = nearFood.ly - a.y;
+    const target = Math.atan2(dy, dx);
+    let diff = target - a.angle;
+    while (diff > Math.PI) diff -= TAU;
+    while (diff < -Math.PI) diff += TAU;
+    a.angle += diff * mods.seekStrength;
+  }
+
+  /* Special behavior steering */
+  if (state.behavior === 'shy' && nearFood){
+    const away = Math.atan2(a.y - nearFood.ly, a.x - nearFood.lx);
+    let diff = away - a.angle;
+    while (diff > Math.PI) diff -= TAU;
+    while (diff < -Math.PI) diff += TAU;
+    a.angle += diff * 0.55;
+  }
+  else if (state.behavior === 'chaotic' || state.behavior === 'volatile'){
+    a.angle += (Math.random() - 0.5) * (state.behavior === 'volatile' ? 1.4 : 0.75);
+  }
+  else if (state.behavior === 'territorial'){
+    const dx = moldCenter.x - a.x, dy = moldCenter.y - a.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const radial = Math.atan2(dy, dx);
+    const tangent = radial + Math.PI * 0.5;
+    let diff = tangent - a.angle;
+    while (diff > Math.PI) diff -= TAU;
+    while (diff < -Math.PI) diff += TAU;
+    a.angle += diff * 0.28;
+    const targetRadius = boundaryR(Math.atan2(a.y - moldCenter.y, a.x - moldCenter.x), t) * 0.92;
+    const radialSign = dist > targetRadius ? 1 : -1;
+    const radialTarget = radial + (radialSign > 0 ? Math.PI : 0);
+    let rdiff = radialTarget - a.angle;
+    while (rdiff > Math.PI) rdiff -= TAU;
+    while (rdiff < -Math.PI) rdiff += TAU;
+    a.angle += rdiff * 0.10;
+  }
+  else if (state.behavior === 'nomadic'){
+    if (Math.random() < 0.018){
+      a.angle += (Math.random() - 0.5) * Math.PI * 0.75;
+    }
+  }
+
+  a.x += Math.cos(a.angle) * AGENT_SPEED * mods.speedMul * slowMul;
+  a.y += Math.sin(a.angle) * AGENT_SPEED * mods.speedMul * slowMul;
+
+  const gx = (a.x * GW) | 0;
+  const gy = (a.y * GH) | 0;
+  if (gx >= 0 && gx < GW && gy >= 0 && gy < GH){
+    const i = gy * GW + gx;
+    let depositScale = (1 - lv * 0.40) * variant.thicknessMul * (mods.depositMul || 1);
+    if (isYhwach) depositScale *= 1.0;
+    grid[i] += params.deposit * depositScale;
+  }
+
+  if (state.behavior === 'lightning' && Math.random() < 0.006){
+    let nearestF = null, nearestD = 0.22;
+    for (const f of foods){
+      const d = Math.hypot(f.lx - a.x, f.ly - a.y);
+      if (d < nearestD){ nearestD = d; nearestF = f; }
+    }
+    if (nearestF){
+      addFullness(0.85 * 0.035);
+      const idx = foods.indexOf(nearestF);
+      if (idx >= 0){
+        foods.splice(idx, 1);
+        updateFoodCount(); updateScoreboard();
+        toast('⚡ zap!', 800);
+      }
+    }
+  }
+
+  const biteCdBase = 0.10 * mods.biteCdMul;
+  const biteBase   = 0.5  * mods.biteMul;
+  for (let i = foods.length - 1; i >= 0; i--){
+    const f = foods[i];
+    const fx = f.lx - a.x, fy = f.ly - a.y;
+    const fd = Math.hypot(fx, fy);
+
+    if (isYhwach && fd < 0.020){
+      addFullness(0.90 * 0.035);
+      foods.splice(i, 1);
+      updateFoodCount(); updateScoreboard();
+      continue;
+    }
+
+    const eatR = 0.022 * (0.55 + 0.55 * (f.amount / f.maxAmount));
+    if (fd < eatR && f.biteCooldown <= 0){
+      f.biteCooldown = biteCdBase;
+      const bite = biteBase * (1 / (1 + fd * 40));
+      f.amount -= bite;
+      addFullness(bite * 0.035);
+      const cx = f.lx * GW, cy = f.ly * GH;
+      for (let oy = -2; oy <= 2; oy++){
+        for (let ox = -2; ox <= 2; ox++){
+          const d2 = ox*ox + oy*oy;
+          if (d2 > 5) continue;
+          const px = (cx + ox) | 0, py = (cy + oy) | 0;
+          if (px < 0 || px >= GW || py < 0 || py >= GH) continue;
+          grid[py*GW + px] += (1 - Math.sqrt(d2)/2.3) * 0.10;
+        }
+      }
+      if (f.amount <= 0){
+        foods.splice(i, 1);
+        updateFoodCount(); updateScoreboard();
+        toast('finished a ' + (f.type === 'fruit' ? f.sprite : f.type), 1400);
+      }
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  ABILITY EFFECTS                                                    */
+/* ══════════════════════════════════════════════════════════════════ */
+function tickAbilities(dt){
+  const abil = state.rarity;
+  if (abil === 'MYTHICAL'){
+    const t = levelT();
+    state.fullness += dt * (0.004 + t * 0.012);
+    while (state.fullness >= 1){
+      state.fullness -= 1;
+      state.stack++;
+      if (state.stack >= MAX_STACK){
+        state.stack = 0;
+        if (state.sizeLevel < state.maxLevel){
+          state.sizeLevel++;
+          levelFlash = 1;
+          const tgt = targetAgentCount();
+          const room = Math.max(0, tgt - agents.length);
+          if (room > 0) addAgentsFrontier(room);
+        }
+      }
+    }
+    abilityPulse = Math.min(1, abilityPulse + dt * 1.6);
+  }
+  else if (abil === 'DIVINE'){
+    for (const f of foods){
+      const dx = moldCenter.x - f.lx;
+      const dy = moldCenter.y - f.ly;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d > baseR() * 0.9){
+        const pull = dt * 0.030;
+        f.lx += (dx / d) * pull;
+        f.ly += (dy / d) * pull;
+      }
+    }
+    abilityPulse = Math.min(1, abilityPulse + dt * 1.6);
+  }
+  else if (abil === 'CELESTIAL'){
+    abilityTimer += dt;
+    if (abilityTimer >= 10){
+      abilityTimer = 0;
+      abilityPulse = 1;
+      const types = Object.keys(FOODS);
+      for (let i = 0; i < 3; i++){
+        const a = Math.random() * TAU;
+        const r = baseR() * (0.9 + Math.random() * 0.6);
+        const type = types[Math.floor(Math.random() * types.length)];
+        dropFoodLocal(
+          moldCenter.x + Math.cos(a) * r,
+          moldCenter.y + Math.sin(a) * r,
+          type
+        );
+        spawnWarpRipple(moldCenter.x + Math.cos(a) * r, moldCenter.y + Math.sin(a) * r);
+      }
+      toast('✦ manifest — 3 foods', 1400);
+    }
+  }
+  else if (abil === 'ABYSSAL'){
+    abilityPulse = Math.min(1, abilityPulse + dt * 1.6);
+    for (let i = foods.length - 1; i >= 0; i--){
+      const f = foods[i];
+      const drain = dt * 0.35;
+      f.amount -= drain;
+      addFullness(drain * 0.035);
+      if (f.amount <= 0){
+        foods.splice(i, 1);
+        updateFoodCount(); updateScoreboard();
+      }
+    }
+  }
+  else {
+    abilityPulse = Math.max(0, abilityPulse - dt * 1.4);
+  }
+}
+
+function diffuseAndDecay(){
+  const D = params.decay;
+  const blend = 0.12;
+  const fadeR = 1.5;
+  for (let y = 0; y < GH; y++){
+    const yo = y * GW;
+    for (let x = 0; x < GW; x++){
+      const i = yo + x;
+      const c = grid[i];
+      const l = x > 0       ? grid[i-1]  : c;
+      const r = x < GW-1    ? grid[i+1]  : c;
+      const u = y > 0       ? grid[i-GW] : c;
+      const dn= y < GH-1    ? grid[i+GW] : c;
+      const avg = (c*4 + l + r + u + dn) * 0.125;
+      const v = c * (1 - blend) + avg * blend;
+      const nx = x / GW - moldCenter.x;
+      const ny = y / GH - moldCenter.y;
+      const d = Math.sqrt(nx*nx + ny*ny);
+      const outside = d > fadeR;
+      gridTmp[i] = outside ? v * D * 0.88 : v * D;
+    }
+  }
+  const t = grid; grid = gridTmp; gridTmp = t;
+}
+
+const THRESH = 0.10;
+const PEAK   = 0.90;
+
+function drawPheromone(){
+  const cellScreen = (TERRITORY_SIZE / GW) * (S / cam.viewW);
+  if (cellScreen < 0.35) return;
+
+  const [mr, mg, mb] = moldRGB;
+  const [dr, dg, db] = driedRGB;
+  const scale = S / cam.viewW;
+  const cellWorld = TERRITORY_SIZE / GW;
+  const cellPx = cellWorld * scale + 0.7;
+
+  const halfW = (W/2) / scale, halfH = (H/2) / scale;
+  const leftW  = cam.wx - halfW, rightW = cam.wx + halfW;
+  const topW   = cam.wy - halfH, botW   = cam.wy + halfH;
+
+  const gxMin = Math.max(0, Math.floor((leftW - TERRITORY_X) / cellWorld));
+  const gxMax = Math.min(GW-1, Math.ceil((rightW - TERRITORY_X) / cellWorld));
+  const gyMin = Math.max(0, Math.floor((topW - TERRITORY_Y) / cellWorld));
+  const gyMax = Math.min(GH-1, Math.ceil((botW - TERRITORY_Y) / cellWorld));
+
+  if (gxMax < gxMin || gyMax < gyMin) return;
+
+  const isYhwach = state.behavior === 'yhwach';
+  const outlineCells = isYhwach ? [] : null;
+
+  const LEVELS = 10;
+  const dried = []; for (let i=0;i<LEVELS;i++) dried.push([]);
+  const fresh = []; for (let i=0;i<LEVELS;i++) fresh.push([]);
+
+  const isActive = (ii) => grid[ii] >= THRESH || permGrid[ii] >= 0.06;
+
+  for (let gy = gyMin; gy <= gyMax; gy++){
+    const yo = gy * GW;
+    for (let gx = gxMin; gx <= gxMax; gx++){
+      const i = yo + gx;
+      const active = grid[i];
+      const perm = permGrid[i];
+      if (active < THRESH && perm < 0.06) continue;
+
+      if (isYhwach){
+        let isEdge = false;
+        if (gx === 0 || gx === GW-1 || gy === 0 || gy === GH-1) isEdge = true;
+        else if (!isActive(i-1) || !isActive(i+1) || !isActive(i-GW) || !isActive(i+GW)) isEdge = true;
+        if (isEdge) outlineCells.push(gx, gy);
+      }
+
+      const aF = active > PEAK ? 1 : (active - THRESH) / (PEAK - THRESH);
+      const aP = perm > 2.4 ? 1 : perm / 2.4;
+      const totalA = 1 - (1 - Math.max(0, aF)) * (1 - Math.max(0, aP) * 0.95);
+      const lvl = Math.min(LEVELS-1, (totalA * LEVELS) | 0);
+      if (aF > aP * 0.9) fresh[lvl].push(gx, gy);
+      else dried[lvl].push(gx, gy);
+    }
+  }
+
+  for (let lvl = 0; lvl < LEVELS; lvl++){
+    const list = dried[lvl];
+    if (!list.length) continue;
+    const a = (lvl + 0.6) / LEVELS * 0.95;
+    const b = 0.65 + 0.35 * a;
+    ctx.fillStyle = `rgba(${Math.min(255,(dr*b)|0)},${Math.min(255,(dg*b)|0)},${Math.min(255,(db*b)|0)},${a.toFixed(2)})`;
+    for (let i = 0; i < list.length; i += 2){
+      const w = localToWorld(list[i]/GW, list[i+1]/GH);
+      const sp = worldToScreen(w.x, w.y);
+      ctx.fillRect(sp.x, sp.y, cellPx, cellPx);
+    }
+  }
+  for (let lvl = 0; lvl < LEVELS; lvl++){
+    const list = fresh[lvl];
+    if (!list.length) continue;
+    const a = (lvl + 0.6) / LEVELS;
+    const b = 0.55 + 0.45 * a;
+    ctx.fillStyle = `rgba(${Math.min(255,(mr*b)|0)},${Math.min(255,(mg*b)|0)},${Math.min(255,(mb*b)|0)},${a.toFixed(2)})`;
+    for (let i = 0; i < list.length; i += 2){
+      const w = localToWorld(list[i]/GW, list[i+1]/GH);
+      const sp = worldToScreen(w.x, w.y);
+      ctx.fillRect(sp.x, sp.y, cellPx, cellPx);
+    }
+  }
+  if (isYhwach && outlineCells && outlineCells.length){
+    ctx.save();
+    ctx.shadowColor = '#ff0022';
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = 'rgba(255,10,50,0.92)';
+    for (let i = 0; i < outlineCells.length; i += 2){
+      const w = localToWorld(outlineCells[i]/GW, outlineCells[i+1]/GH);
+      const sp = worldToScreen(w.x, w.y);
+      ctx.fillRect(sp.x, sp.y, cellPx + 0.5, cellPx + 0.5);
+    }
+    ctx.restore();
+  }
+}
+
+function drawBackground(){
+  const [br, bg, bb] = bgRGB;
+  ctx.fillStyle = `rgb(${br},${bg},${bb})`;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawWorldBorder(){
+  const tl = worldToScreen(0, 0);
+  const brc = worldToScreen(WORLD_SIZE, WORLD_SIZE);
+  const x = Math.min(tl.x, brc.x), y = Math.min(tl.y, brc.y);
+  const w = Math.abs(brc.x - tl.x), h = Math.abs(brc.y - tl.y);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,80,80,0.55)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([14, 8]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(255,80,80,0.85)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(255,80,80,0.6)';
+  ctx.font = '10px ui-monospace,monospace';
+  ctx.fillText('0,0', x + 6, y + 14);
+  ctx.fillText(WORLD_SIZE + ',' + WORLD_SIZE, x + w - 180, y + h - 6);
+  ctx.restore();
+}
+
+function drawBehaviorAura(t){
+  /* ability ring — color-coded dashed halo for rarity abilities */
+  if (ABILITIES[state.rarity]){
+    const world = localToWorld(moldCenter.x, moldCenter.y);
+    const sp = worldToScreen(world.x, world.y);
+    const R = baseR() * TERRITORY_SIZE * (S / cam.viewW);
+    const rar = RARITY_BY_NAME[state.rarity];
+    const pulse = 0.20 + 0.15 * Math.sin(t * 2.4) + abilityPulse * 0.35;
+    ctx.save();
+    ctx.strokeStyle = rar.color;
+    ctx.globalAlpha = Math.min(1, pulse * 0.6);
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 10]);
+    ctx.lineDashOffset = -t * 30;
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, R * 1.45, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  const world = localToWorld(moldCenter.x, moldCenter.y);
+  const sp = worldToScreen(world.x, world.y);
+  const R = baseR() * TERRITORY_SIZE * (S / cam.viewW);
+  let col0 = null, col1 = null;
+  if (state.behavior === 'flaming'){ col0 = 'rgba(255,120,20,0.10)'; col1 = 'rgba(255,60,0,0)'; }
+  else if (state.behavior === 'acid'){ col0 = 'rgba(140,255,60,0.09)'; col1 = 'rgba(80,200,0,0)'; }
+  else if (state.behavior === 'lightning'){ col0 = 'rgba(255,255,120,0.10)'; col1 = 'rgba(255,255,0,0)'; }
+  else if (state.behavior === 'aggressive'){ col0 = 'rgba(255,70,90,0.10)'; col1 = 'rgba(180,0,20,0)'; }
+  else if (state.behavior === 'greedy' || state.behavior === 'gluttonous'){ col0 = 'rgba(255,190,60,0.09)'; col1 = 'rgba(180,90,0,0)'; }
+  else if (state.behavior === 'shy'){ col0 = 'rgba(170,130,255,0.07)'; col1 = 'rgba(70,40,140,0)'; }
+  else if (state.behavior === 'chaotic' || state.behavior === 'volatile'){ col0 = 'rgba(255,90,210,0.08)'; col1 = 'rgba(130,0,90,0)'; }
+  else if (state.behavior === 'hunter'){ col0 = 'rgba(255,120,40,0.09)'; col1 = 'rgba(120,30,0,0)'; }
+  else if (state.behavior === 'territorial'){ col0 = 'rgba(90,255,150,0.08)'; col1 = 'rgba(0,100,50,0)'; }
+  else if (state.behavior === 'swarm'){ col0 = 'rgba(210,255,80,0.08)'; col1 = 'rgba(100,130,0,0)'; }
+  else if (state.behavior === 'magnetic'){ col0 = 'rgba(90,180,255,0.08)'; col1 = 'rgba(0,70,150,0)'; }
+  else if (state.behavior === 'yhwach'){
+    const pulse = 0.10 + 0.05 * Math.sin(t * 1.6);
+    col0 = `rgba(120,20,180,${pulse})`;
+    col1 = 'rgba(40,0,80,0)';
+  }
+  if (!col0) return;
+  const g = ctx.createRadialGradient(sp.x, sp.y, R*0.2, sp.x, sp.y, R*1.6);
+  g.addColorStop(0, col0);
+  g.addColorStop(1, col1);
+  ctx.fillStyle = g;
+  ctx.fillRect(sp.x - R*2, sp.y - R*2, R*4, R*4);
+}
+
+/* ══════════════════════════════════════════════════════════════════ */
+/*  FOOD DRAWING                                                       */
+/* ══════════════════════════════════════════════════════════════════ */
+function drawFood(f, sx, sy, size, t){
+  const ratio = f.amount / f.maxAmount;
+  const s = size * (0.55 + 0.45 * ratio);
+  const wob = Math.sin(t * 2 + f.wobble) * 0.04;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(f.angle + wob);
+  switch (f.sprite){
+    case 'strawberry': drawStrawberry(s); break;
+    case 'banana':     drawBanana(s);     break;
+    case 'apple':      drawApple(s);      break;
+    case 'dragonfruit':drawDragonfruit(s);break;
+    case 'avocado':    drawAvocado(s);    break;
+    case 'oats':       drawOats(s);       break;
+    case 'rice':       drawRice(s);       break;
+    case 'bread':      drawBread(s);      break;
+    case 'sugar':      drawSugar(s);      break;
+    case 'broccoli':   drawBroccoli(s);   break;
+    case 'carrot':     drawCarrot(s);     break;
+    case 'tomato':     drawTomato(s);     break;
+    case 'potato':     drawPotato(s);     break;
+    case 'corn':       drawCorn(s);       break;
+    case 'leaves':     drawLeaf(s);       break;
+    case 'cheese':     drawCheese(s);     break;
+    case 'honey':      drawHoney(s);      break;
+    case 'yogurt':     drawYogurt(s);     break;
+    case 'wood':       drawWood(s);       break;
+    case 'coffee':     drawCoffee(s);     break;
+  }
+  ctx.restore();
+}
+function drawStrawberry(s){
+  ctx.fillStyle = '#d92b3a';
+  ctx.beginPath();
+  ctx.moveTo(0, s);
+  ctx.bezierCurveTo(-s*0.95, s*0.45, -s*0.85, -s*0.55, 0, -s*0.68);
+  ctx.bezierCurveTo(s*0.85, -s*0.55, s*0.95, s*0.45, 0, s);
+  ctx.fill();
+  ctx.fillStyle = '#ffe066';
+  for (let i = 0; i < 9; i++){
+    const a = (i/9) * TAU;
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(a)*s*0.42, Math.sin(a)*s*0.55 + s*0.10, s*0.06, s*0.09, 0, 0, TAU);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#3d8a35';
+  for (let i = -2; i <= 2; i++){
+    ctx.save();
+    ctx.rotate(i * 0.42);
+    ctx.beginPath();
+    ctx.moveTo(0, -s*0.55);
+    ctx.lineTo(-s*0.15, -s*1.05);
+    ctx.lineTo(s*0.15, -s*1.05);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+function drawBanana(s){
+  const Wb = s * 0.90;
+  ctx.fillStyle = '#f4cb3e';
+  ctx.beginPath();
+  ctx.moveTo(-Wb, 0);
+  ctx.bezierCurveTo(-Wb*0.40, s*1.10,  Wb*0.40, s*1.10,  Wb, 0);
+  ctx.bezierCurveTo( Wb*0.40, s*0.35, -Wb*0.40, s*0.35, -Wb, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(160,110,20,0.38)';
+  ctx.beginPath();
+  ctx.moveTo(-Wb*0.80, s*0.15);
+  ctx.bezierCurveTo(-Wb*0.35, s*0.95,  Wb*0.35, s*0.95,  Wb*0.80, s*0.15);
+  ctx.bezierCurveTo( Wb*0.35, s*0.68, -Wb*0.35, s*0.68, -Wb*0.80, s*0.15);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,245,160,0.75)';
+  ctx.lineWidth = s * 0.06;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-Wb*0.68, s*0.05);
+  ctx.quadraticCurveTo(0, s*0.28, Wb*0.68, s*0.05);
+  ctx.stroke();
+  ctx.fillStyle = '#6b4a1a';
+  ctx.beginPath();
+  ctx.ellipse(-Wb*0.88, s*0.07, s*0.055, s*0.085, -0.5, 0, TAU); ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse( Wb*0.88, s*0.07, s*0.055, s*0.085,  0.5, 0, TAU); ctx.fill();
+}
+function drawApple(s){
+  ctx.fillStyle = '#c92828';
+  ctx.beginPath();
+  ctx.ellipse(0, s*0.10, s*0.85, s*0.78, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.20)';
+  ctx.beginPath();
+  ctx.ellipse(s*0.30, s*0.30, s*0.35, s*0.40, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(-s*0.30, -s*0.25, s*0.14, s*0.24, -0.4, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#4a2a10';
+  ctx.lineWidth = s * 0.10;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, -s*0.55);
+  ctx.lineTo(s*0.14, -s*1.00);
+  ctx.stroke();
+  ctx.fillStyle = '#4a8a3a';
+  ctx.beginPath();
+  ctx.ellipse(s*0.38, -s*0.78, s*0.28, s*0.13, -0.5, 0, TAU); ctx.fill();
+}
+function drawDragonfruit(s){
+  ctx.fillStyle = '#e83a7a';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s*0.75, s*1.02, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(120,10,60,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(s*0.22, s*0.25, s*0.35, s*0.55, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#5cc45c';
+  for (let i = -2; i <= 2; i++){
+    ctx.save();
+    ctx.rotate(i * 0.55 - Math.PI/2);
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 1.05);
+    ctx.lineTo(-s*0.14, -s*0.70);
+    ctx.lineTo( s*0.14, -s*0.70);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+function drawAvocado(s){
+  ctx.fillStyle = '#2a4a1c';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s*0.72, s*1.00, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#c8e06a';
+  ctx.beginPath();
+  ctx.ellipse(0, s*0.05, s*0.54, s*0.82, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#6b3a1a';
+  ctx.beginPath();
+  ctx.arc(0, s*0.22, s*0.28, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath();
+  ctx.arc(-s*0.08, s*0.14, s*0.10, 0, TAU); ctx.fill();
+}
+function drawOats(s){
+  ctx.fillStyle = '#d9b06a';
+  for (let i = 0; i < 9; i++){
+    const a = (i * 2.399) % TAU;
+    const r = (i / 9) * s * 0.75;
+    ctx.save();
+    ctx.translate(Math.cos(a)*r, Math.sin(a)*r);
+    ctx.rotate(a);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s*0.22, s*0.14, 0, 0, TAU);
+    ctx.fill(); ctx.restore();
+  }
+}
+function drawRice(s){
+  ctx.fillStyle = '#f0ead8';
+  for (let i = 0; i < 10; i++){
+    const a = (i * 2.399) % TAU;
+    const r = (i / 10) * s * 0.80;
+    ctx.save();
+    ctx.translate(Math.cos(a)*r, Math.sin(a)*r);
+    ctx.rotate(a + 0.5);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s*0.28, s*0.10, 0, 0, TAU);
+    ctx.fill(); ctx.restore();
+  }
+}
+function drawBread(s){
+  ctx.fillStyle = '#a8763f';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.85, -s*0.55);
+  ctx.quadraticCurveTo(-s*0.95, -s*0.85, -s*0.55, -s*0.85);
+  ctx.lineTo(s*0.55, -s*0.85);
+  ctx.quadraticCurveTo(s*0.95, -s*0.85, s*0.85, -s*0.55);
+  ctx.lineTo(s*0.75, s*0.55);
+  ctx.quadraticCurveTo(s*0.75, s*0.85, s*0.45, s*0.85);
+  ctx.lineTo(-s*0.45, s*0.85);
+  ctx.quadraticCurveTo(-s*0.75, s*0.85, -s*0.75, s*0.55);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#7a5228';
+  ctx.beginPath();
+  ctx.ellipse(0, -s*0.72, s*0.55, s*0.10, 0, 0, TAU); ctx.fill();
+}
+function drawSugar(s){
+  ctx.fillStyle = '#e8eef5';
+  for (let i = 0; i < 7; i++){
+    const a = (i * 2.399) % TAU;
+    const r = (i / 7) * s * 0.75;
+    ctx.save();
+    ctx.translate(Math.cos(a)*r, Math.sin(a)*r);
+    ctx.rotate(a * 1.3);
+    ctx.beginPath();
+    ctx.moveTo(0, -s*0.28); ctx.lineTo(s*0.22, 0);
+    ctx.lineTo(0, s*0.28); ctx.lineTo(-s*0.22, 0);
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  for (let i = 0; i < 4; i++){
+    const a = (i * 1.7) % TAU;
+    const r = s * 0.45;
+    ctx.beginPath();
+    ctx.arc(Math.cos(a)*r, Math.sin(a)*r, s*0.06, 0, TAU);
+    ctx.fill();
+  }
+}
+function drawBroccoli(s){
+  ctx.fillStyle = '#3d8a35';
+  for (let i = 0; i < 7; i++){
+    const a = (i / 7) * TAU;
+    ctx.beginPath();
+    ctx.arc(Math.cos(a)*s*0.55, Math.sin(a)*s*0.55, s*0.42, 0, TAU);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#2f6b28';
+  ctx.beginPath();
+  ctx.arc(0, 0, s*0.55, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#4a9c40';
+  for (let i = 0; i < 5; i++){
+    const a = (i / 5) * TAU + 0.3;
+    ctx.beginPath();
+    ctx.arc(Math.cos(a)*s*0.45, Math.sin(a)*s*0.45, s*0.28, 0, TAU);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#5a7a3a';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.20, s*0.55);
+  ctx.lineTo(s*0.20, s*0.55);
+  ctx.lineTo(s*0.15, s*0.95);
+  ctx.lineTo(-s*0.15, s*0.95);
+  ctx.closePath();
+  ctx.fill();
+}
+function drawCarrot(s){
+  ctx.fillStyle = '#e8823a';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.55, -s*0.40);
+  ctx.lineTo(s*0.55, -s*0.40);
+  ctx.lineTo(0, s*0.95);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  for (let i = 0; i < 4; i++){
+    ctx.fillRect(-s*0.40 + i*s*0.22, -s*0.15 + i*s*0.20, s*0.15, s*0.04);
+  }
+  ctx.fillStyle = '#3d8a35';
+  for (let i = -2; i <= 2; i++){
+    ctx.save();
+    ctx.rotate(i * 0.28);
+    ctx.beginPath();
+    ctx.moveTo(0, -s*0.40);
+    ctx.lineTo(-s*0.10, -s*1.05);
+    ctx.lineTo(s*0.10, -s*1.05);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+function drawTomato(s){
+  ctx.fillStyle = '#d93b30';
+  ctx.beginPath();
+  ctx.ellipse(0, s*0.10, s*0.85, s*0.78, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(-s*0.30, -s*0.20, s*0.18, s*0.28, -0.4, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#3d8a35';
+  for (let i = -2; i <= 2; i++){
+    ctx.save();
+    ctx.rotate(i * 0.55);
+    ctx.beginPath();
+    ctx.moveTo(0, -s*0.55);
+    ctx.lineTo(-s*0.12, -s*0.85);
+    ctx.lineTo(s*0.12, -s*0.85);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+function drawPotato(s){
+  ctx.fillStyle = '#a8783f';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s*0.85, s*0.65, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath();
+  ctx.ellipse(s*0.20, s*0.15, s*0.10, s*0.07, 0.3, 0, TAU); ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(-s*0.25, -s*0.15, s*0.08, s*0.06, -0.2, 0, TAU); ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(s*0.35, -s*0.20, s*0.07, s*0.05, 0.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.beginPath();
+  ctx.ellipse(-s*0.35, -s*0.28, s*0.25, s*0.15, -0.5, 0, TAU); ctx.fill();
+}
+function drawCorn(s){
+  ctx.fillStyle = '#f4cb3e';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s*0.55, s*1.00, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(180,120,20,0.55)';
+  for (let row = -3; row <= 3; row++){
+    for (let col = -2; col <= 2; col++){
+      const ox = col * s*0.20 + (row % 2 ? s*0.10 : 0);
+      const oy = row * s*0.20;
+      if (Math.abs(ox) > s*0.42) continue;
+      ctx.beginPath();
+      ctx.arc(ox, oy, s*0.055, 0, TAU);
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = '#3d8a35';
+  for (const side of [-1, 1]){
+    ctx.save();
+    ctx.scale(side, 1);
+    ctx.beginPath();
+    ctx.moveTo(s*0.40, s*0.90);
+    ctx.bezierCurveTo(s*1.05, s*0.30, s*1.05, -s*0.60, s*0.45, -s*0.95);
+    ctx.bezierCurveTo(s*0.60, -s*0.30, s*0.60, s*0.30, s*0.40, s*0.90);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+function drawLeaf(s){
+  ctx.fillStyle = '#7a5a2e';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.80, s*0.20);
+  ctx.bezierCurveTo(-s*0.60, -s*0.90, s*0.60, -s*0.90, s*0.80, s*0.20);
+  ctx.bezierCurveTo(s*0.40, s*0.85, -s*0.40, s*0.85, -s*0.80, s*0.20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#4a3518';
+  ctx.lineWidth = s*0.06;
+  ctx.beginPath();
+  ctx.moveTo(0, -s*0.65);
+  ctx.lineTo(0, s*0.70);
+  ctx.stroke();
+  ctx.lineWidth = s*0.03;
+  for (let i = 0; i < 4; i++){
+    const y = -s*0.40 + i * s*0.30;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(-s*0.35, y - s*0.15);
+    ctx.moveTo(0, y);
+    ctx.lineTo(s*0.35, y - s*0.15);
+    ctx.stroke();
+  }
+}
+function drawCheese(s){
+  ctx.fillStyle = '#f4d35e';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.85, s*0.55);
+  ctx.lineTo(s*0.85, s*0.55);
+  ctx.lineTo(s*0.85, -s*0.10);
+  ctx.lineTo(-s*0.30, -s*0.70);
+  ctx.lineTo(-s*0.85, -s*0.10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(120,80,10,0.35)';
+  ctx.beginPath(); ctx.arc(-s*0.40, s*0.15, s*0.12, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc( s*0.30, s*0.05, s*0.09, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc( s*0.05, s*0.35, s*0.08, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(-s*0.20, -s*0.10, s*0.07, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(-s*0.75, -s*0.05, s*0.40, s*0.03);
+}
+function drawHoney(s){
+  ctx.fillStyle = '#e8a838';
+  ctx.beginPath();
+  ctx.moveTo(0, s*0.90);
+  ctx.bezierCurveTo(-s*0.90, s*0.20, -s*0.65, -s*0.65, 0, -s*0.75);
+  ctx.bezierCurveTo(s*0.65, -s*0.65, s*0.90, s*0.20, 0, s*0.90);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,230,140,0.85)';
+  ctx.beginPath();
+  ctx.ellipse(-s*0.25, -s*0.20, s*0.14, s*0.30, -0.3, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath();
+  ctx.arc(-s*0.28, -s*0.32, s*0.07, 0, TAU); ctx.fill();
+}
+function drawYogurt(s){
+  ctx.fillStyle = '#e8e8e0';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.60, -s*0.55);
+  ctx.lineTo(s*0.60, -s*0.55);
+  ctx.lineTo(s*0.75, s*0.70);
+  ctx.lineTo(-s*0.75, s*0.70);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#f5f5ee';
+  ctx.beginPath();
+  ctx.ellipse(0, -s*0.55, s*0.60, s*0.20, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#d8d8c8';
+  ctx.beginPath();
+  ctx.ellipse(0, -s*0.55, s*0.44, s*0.14, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ff7a9a';
+  ctx.beginPath();
+  ctx.arc(-s*0.15, s*0.15, s*0.10, 0, TAU); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(s*0.20, s*0.28, s*0.08, 0, TAU); ctx.fill();
+}
+function drawWood(s){
+  ctx.fillStyle = '#7a5a3a';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.90, -s*0.35);
+  ctx.lineTo(s*0.70, -s*0.55);
+  ctx.lineTo(s*0.95, s*0.30);
+  ctx.lineTo(-s*0.65, s*0.55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.30)';
+  ctx.lineWidth = s*0.04;
+  for (let i = 0; i < 3; i++){
+    ctx.beginPath();
+    const y = -s*0.20 + i * s*0.22;
+    ctx.moveTo(-s*0.80, y);
+    ctx.bezierCurveTo(-s*0.20, y + s*0.08, s*0.20, y - s*0.08, s*0.80, y + s*0.04);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(-s*0.75, -s*0.28, s*0.50, s*0.03);
+}
+function drawCoffee(s){
+  ctx.fillStyle = '#3a2418';
+  for (let i = 0; i < 14; i++){
+    const a = (i * 2.399) % TAU;
+    const r = (i / 14) * s * 0.85;
+    const ox = Math.cos(a)*r + (Math.random()-0.5)*s*0.10;
+    const oy = Math.sin(a)*r + (Math.random()-0.5)*s*0.10;
+    ctx.beginPath();
+    ctx.arc(ox, oy, s*0.14 + Math.random()*s*0.05, 0, TAU);
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(90,60,35,0.55)';
+  for (let i = 0; i < 6; i++){
+    const a = (i * 1.7) % TAU;
+    const r = (i / 6) * s * 0.65;
+    ctx.beginPath();
+    ctx.arc(Math.cos(a)*r, Math.sin(a)*r, s*0.06, 0, TAU);
+    ctx.fill();
+  }
+}
+
+function updateEffects(dt){
+  for (let i = effects.length - 1; i >= 0; i--){
+    const e = effects[i];
+    e.life -= dt;
+    if (e.life <= 0){ effects.splice(i, 1); continue; }
+    if (e.type === 'drip'){ e.x += e.vx * dt; e.y += e.vy * dt; }
+  }
+}
+
+function drawEffects(){
+  for (const e of effects){
+    const a = e.life / e.maxLife;
+    if (e.type === 'drip'){
+      const w = localToWorld(e.x, e.y);
+      const sp = worldToScreen(w.x, w.y);
+      const col = e.voidLike ? '140,40,200' : '140,255,60';
+      ctx.fillStyle = `rgba(${col},${a.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, e.size, 0, TAU); ctx.fill();
+    } else if (e.type === 'warp'){
+      const w = localToWorld(e.x, e.y);
+      const sp = worldToScreen(w.x, w.y);
+      const R = (1 - a) * 220;
+      ctx.save();
+      ctx.strokeStyle = `rgba(200,80,255,${(a * 0.9).toFixed(2)})`;
+      ctx.lineWidth = 3 * a;
+      ctx.shadowColor = '#c85cff';
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, R, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+function spawnBehaviorParticles(dt){
+  if (state.behavior === 'acid'){
+    if (foods.length > 0 && Math.random() < dt * 20){
+      const f = foods[Math.floor(Math.random() * foods.length)];
+      spawnDrip(f.lx + (Math.random()-0.5)*0.05, f.ly + (Math.random()-0.5)*0.05, false);
+    }
+  } else if (state.behavior === 'yhwach'){
+    if (Math.random() < dt * 12){
+      const a = Math.random() * TAU;
+      const r = baseR() * Math.random();
+      spawnDrip(moldCenter.x + Math.cos(a)*r, moldCenter.y + Math.sin(a)*r, true);
+    }
+  }
+}
+
+function frame(now){
+  const dt = Math.min(0.05, (now - lastTime)/1000 || 0.016);
+  lastTime = now;
+  const t = (now - t0) / 1000;
+
+  levelFlash = Math.max(0, levelFlash - dt * 1.2);
+  for (const f of foods){ if (f.biteCooldown > 0) f.biteCooldown -= dt; }
+
+  if (state.behavior === 'yhwach'){
+    yhwachSpread += dt * 1.8;
+  }
+
+  if (warpCooldown > 0){
+    warpCooldown = Math.max(0, warpCooldown - dt);
+    updateWarpUI();
+  }
+
+  if (spawnSlowTimer > 0){
+    spawnSlowTimer = Math.max(0, spawnSlowTimer - dt);
+  }
+
+  tickAbilities(dt);
+
+  updateDrift(dt, t);
+  for (let i = 0; i < agents.length; i++) stepAgent(agents[i], t);
+  diffuseAndDecay();
+  updateEffects(dt);
+  spawnBehaviorParticles(dt);
+  if (state.behavior === 'yhwach') updateYhwachEyes(dt, t);
+
+  const target = targetAgentCount();
+  if (agents.length < target - 20){
+    addAgentsFrontier(Math.min(50, target - agents.length));
+  }
+
+  drawBackground();
+  drawWorldBorder();
+  drawBehaviorAura(t);
+
+  if (levelFlash > 0){
+    const world = localToWorld(moldCenter.x, moldCenter.y);
+    const sp = worldToScreen(world.x, world.y);
+    const R = baseR() * TERRITORY_SIZE * (S / cam.viewW);
+    const g = ctx.createRadialGradient(sp.x, sp.y, R*0.1, sp.x, sp.y, R*2);
+    const [mr, mg, mb] = moldRGB;
+    g.addColorStop(0, `rgba(${mr},${mg},${mb},${levelFlash*0.22})`);
+    g.addColorStop(1, `rgba(${mr},${mg},${mb},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(sp.x - R*2, sp.y - R*2, R*4, R*4);
+  }
+
+  drawPheromone();
+  if (state.behavior === 'yhwach') drawYhwachEyes();
+
+  const foodSize = S * 0.055 * (cam.viewW > 2000000 ? 0.5 : 1);
+  for (const f of foods){
+    const w = localToWorld(f.lx, f.ly);
+    const sp = worldToScreen(w.x, w.y);
+    if (sp.x < -100 || sp.x > W+100 || sp.y < -100 || sp.y > H+100) continue;
+    drawFood(f, sp.x, sp.y, foodSize, t);
+  }
+
+  drawEffects();
+
+  if ((frameCount++ & 7) === 0) {
+    updateMeter(); updateScoreboard();
+    const w = localToWorld(moldCenter.x, moldCenter.y);
+    coordEl.textContent = Math.round(w.x) + ' , ' + Math.round(w.y);
+    viewVal.textContent = Math.round(cam.viewW);
+  }
+  requestAnimationFrame(frame);
+}
+
+/* UI */
+const panel     = document.getElementById('panel');
+const seedEl    = document.getElementById('seedEl');
+const coordEl   = document.getElementById('coordEl');
+const nameVal   = document.getElementById('nameVal');
+const rarityVal = document.getElementById('rarityVal');
+const seedVal   = document.getElementById('seedVal');
+const lvlVal    = document.getElementById('lvlVal');
+const bioVal    = document.getElementById('bioVal');
+const colorVal  = document.getElementById('colorVal');
+const speedVal  = document.getElementById('speedVal');
+const rootsVal  = document.getElementById('rootsVal');
+const behaviorVal = document.getElementById('behaviorVal');
+const abilityVal = document.getElementById('abilityVal');
+const boostVal  = document.getElementById('boostVal');
+const fullVal   = document.getElementById('fullVal');
+const fullBar   = document.getElementById('fullBar');
+const stackVal  = document.getElementById('stackVal');
+const foodsEl   = document.getElementById('foods');
+const toastEl   = document.getElementById('toast');
+const foodCountEl = document.getElementById('foodCount');
+const viewVal   = document.getElementById('viewVal');
+const warpBtn   = document.getElementById('warpBtn');
+const warpLbl   = document.getElementById('warpLbl');
+const foodBtn   = document.getElementById('foodBtn');
+const foodLbl   = document.getElementById('foodLbl');
+
+const capsuleBtn = document.getElementById('capsuleBtn');
+const capsuleModal = document.getElementById('capsuleModal');
+const capsuleGrid = document.getElementById('capsuleGrid');
+const CAPSULE_COUNT = 10;
+const CAPSULE_STORAGE_KEY = 'petMoldCapsulesV1';
+let capsuleSlots = loadCapsuleSlots();
+
+const scoreboard = document.getElementById('scoreboard');
+const sbRarity = document.getElementById('sbRarity');
+const sbBoostRow = document.getElementById('sbBoostRow');
+const sbBoost  = document.getElementById('sbBoost');
+const sbSize   = document.getElementById('sbSize');
+const sbStack  = document.getElementById('sbStack');
+const sbFood   = document.getElementById('sbFood');
+const sbFill   = document.getElementById('sbFill');
+const sbHint   = document.getElementById('sbHint');
+
+const optMono   = document.getElementById('optMono');
+const optSat    = document.getElementById('optSat');
+const optFuzz   = document.getElementById('optFuzz');
+const optWander = document.getElementById('optWander');
+
+const redeemInput  = document.getElementById('redeemInput');
+const redeemBtn    = document.getElementById('redeemBtn');
+const redeemStatus = document.getElementById('redeemStatus');
+
+for (const [key, f] of Object.entries(FOODS)){
+  const b = document.createElement('button');
+  b.className = 'chip';
+  b.dataset.key = key;
+  b.innerHTML = `<i style="background:${f.chipColor}"></i>${f.name}`;
+  b.addEventListener('click', () => { state.food = key; syncFood(); });
+  foodsEl.appendChild(b);
+}
+function syncFood(){
+  for (const c of foodsEl.children) c.classList.toggle('on', c.dataset.key === state.food);
+}
+function updateMeter(){
+  const pct = Math.round(state.fullness * 100);
+  fullBar.style.width = pct + '%';
+  fullVal.textContent = pct + '%';
+}
+function updateFoodCount(){
+  if (foodCountEl) foodCountEl.textContent = foods.length + ' item' + (foods.length === 1 ? '' : 's');
+}
+function updateScoreboard(){
+  const rar = RARITY_BY_NAME[state.rarity] || RARITIES[0];
+  sbRarity.textContent = state.rarity;
+  sbRarity.style.color = rar.color;
+
+  if (state.boostMultiplier > 1){
+    sbBoostRow.style.display = '';
+    sbBoost.textContent = '×' + state.boostMultiplier.toFixed(1);
+  } else {
+    sbBoostRow.style.display = 'none';
+  }
+
+  sbSize.textContent = state.sizeLevel + ' / ' + state.maxLevel;
+  sbStack.textContent = state.stack + ' / ' + MAX_STACK;
+  sbFood.textContent = foods.length;
+  sbFill.style.width = (state.fullness * 100) + '%';
+  sbFill.style.background = rar.color;
+
+  if (placeFoodArmed) sbHint.textContent = 'tap canvas to place food';
+  else if (spawnSlowTimer > 0) sbHint.textContent = 'warming up — ' + Math.ceil(spawnSlowTimer) + 's';
+  else if (state.sizeLevel >= state.maxLevel) sbHint.textContent = 'maximum size reached';
+  else if (foods.length > 0) sbHint.textContent = 'eating…';
+  else if (state.fullness > 0.05) sbHint.textContent = 'digesting…';
+  else sbHint.textContent = 'arm ✦ to place food';
+}
+function bumpScoreboard(big){
+  scoreboard.classList.remove('pop');
+  void scoreboard.offsetWidth;
+  scoreboard.classList.add('pop');
+  if (big){
+    scoreboard.classList.remove('flash');
+    void scoreboard.offsetWidth;
+    scoreboard.classList.add('flash');
+  }
+}
+function syncUI(){
+  const rar = RARITY_BY_NAME[state.rarity] || RARITIES[0];
+  const beh = BEHAVIOR_BY_NAME[state.behavior] || BEHAVIORS[0];
+
+  const isYh = state.behavior === 'yhwach';
+  seedEl.textContent  = 'seed ' + (isYh ? '-444' : seed);
+  seedVal.textContent = isYh ? '-444' : String(seed);
+  nameVal.textContent = strainName;
+  rarityVal.textContent = state.rarity;
+  rarityVal.style.color = rar.color;
+  lvlVal.textContent  = state.sizeLevel + ' / ' + state.maxLevel;
+  bioVal.textContent  = agents.length + ' hyphae';
+
+  colorVal.textContent = variant ? variant.hueName : '—';
+  speedVal.textContent = variant ? variant.speedLabel : '—';
+  rootsVal.textContent = variant ? variant.rootsLabel : '—';
+  behaviorVal.textContent = beh.label;
+  behaviorVal.style.color = beh.color;
+
+  const abilInfo = ABILITIES[state.rarity];
+  abilityVal.textContent = abilInfo ? abilInfo.name : '—';
+  abilityVal.style.color = abilInfo ? rar.color : '';
+
+  boostVal.textContent = state.boostMultiplier > 1 ? '×' + state.boostMultiplier.toFixed(1) : 'none';
+  boostVal.style.color = state.boostMultiplier > 1 ? '#ffb84a' : '';
+
+  stackVal.textContent = state.stack + ' / ' + MAX_STACK;
+
+  optMono.checked = state.settings.monochrome;
+  optSat.value    = state.settings.saturation;
+  optFuzz.value   = state.settings.density;
+  optWander.checked = state.settings.wander;
+
+  viewVal.textContent = Math.round(cam.viewW);
+
+  syncFood(); updateMeter(); updateScoreboard(); updateFoodCount();
+  updateWarpUI(); updateFoodBtnUI();
+}
+
+function updateWarpUI(){
+  const isYh = state.behavior === 'yhwach';
+  if (!isYh){
+    warpBtn.classList.remove('show', 'armed', 'cooldown');
+    return;
+  }
+  warpBtn.classList.add('show');
+
+  if (warpCooldown > 0){
+    warpBtn.classList.add('cooldown');
+    warpBtn.classList.remove('armed');
+    warpLbl.textContent = Math.ceil(warpCooldown) + 's';
+  } else if (warpArmed){
+    warpBtn.classList.remove('cooldown');
+    warpBtn.classList.add('armed');
+    warpLbl.textContent = 'ARMED';
+  } else {
+    warpBtn.classList.remove('cooldown', 'armed');
+    warpLbl.textContent = 'WARP';
+  }
+
+  cv.classList.toggle('warping', warpArmed && warpCooldown <= 0);
+}
+
+function updateFoodBtnUI(){
+  foodBtn.classList.toggle('armed', placeFoodArmed);
+  foodLbl.textContent = placeFoodArmed ? 'ARMED' : 'PLACE';
+  cv.classList.toggle('placing', placeFoodArmed);
+  updateScoreboard();
+}
+
+let toastTimer = 0;
+function toast(msg, ms){
+  toastEl.textContent = msg;
+  toastEl.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('on'), ms||1800);
+}
+function openPanel(){ panel.classList.add('open'); panel.setAttribute('aria-hidden','false'); }
+function closePanel(){ panel.classList.remove('open'); panel.setAttribute('aria-hidden','true'); }
+
+function loadCapsuleSlots(){
+  const empty = Array.from({length: CAPSULE_COUNT}, () => null);
+  try {
+    const raw = localStorage.getItem(CAPSULE_STORAGE_KEY);
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return empty;
+    for (let i = 0; i < CAPSULE_COUNT; i++){
+      empty[i] = (parsed[i] && typeof parsed[i] === 'object') ? parsed[i] : null;
+    }
+  } catch(err){}
+  return empty;
+}
+
+function saveCapsuleSlots(){
+  try {
+    localStorage.setItem(CAPSULE_STORAGE_KEY, JSON.stringify(capsuleSlots));
+    return true;
+  } catch(err){
+    toast('capsule storage unavailable', 2200);
+    return false;
+  }
+}
+
+function capsuleSummary(slot, info){
+  info.textContent = '';
+  if (!slot){
+    info.textContent = 'EMPTY — save the current mold here.';
+    return;
+  }
+  const rar = String(slot.rarity || 'UNKNOWN');
+  const beh = String(slot.behavior || 'normal');
+  const lvl = typeof slot.sizeLevel === 'number' ? slot.sizeLevel : '—';
+  const nm = String(slot.name || 'unnamed');
+  const rarityEl = document.createElement('span');
+  rarityEl.className = 'capsule-rarity';
+  rarityEl.textContent = rar;
+  rarityEl.style.color = (RARITY_BY_NAME[rar] || RARITIES[0]).color;
+  info.appendChild(rarityEl);
+  info.appendChild(document.createTextNode(' · ' + nm));
+  info.appendChild(document.createElement('br'));
+  info.appendChild(document.createTextNode('size ' + lvl + ' / ' + MAX_LEVEL + ' · ' + beh));
+}
+
+function renderCapsules(){
+  capsuleGrid.innerHTML = '';
+  capsuleSlots.forEach((slot, index) => {
+    const card = document.createElement('div');
+    card.className = 'capsule-card' + (slot ? ' occupied' : '');
+
+    const top = document.createElement('div');
+    top.className = 'capsule-top';
+    const name = document.createElement('span');
+    name.className = 'capsule-name';
+    name.textContent = 'capsule ' + String(index + 1).padStart(2, '0');
+    const status = document.createElement('span');
+    status.className = 'capsule-state' + (slot ? ' saved' : '');
+    status.textContent = slot ? 'saved' : 'empty';
+    top.append(name, status);
+
+    const info = document.createElement('div');
+    info.className = 'capsule-info';
+    capsuleSummary(slot, info);
+
+    const actions = document.createElement('div');
+    actions.className = 'capsule-actions';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'save';
+    saveBtn.addEventListener('click', () => {
+      const saved = buildSaveObject();
+      capsuleSlots[index] = saved;
+      if (saveCapsuleSlots()){
+        const fileName = downloadMoldData(saved, index);
+        renderCapsules();
+        toast(fileName
+          ? 'saved capsule ' + (index + 1) + ' + downloaded ' + fileName
+          : 'saved mold to capsule ' + (index + 1), 3200);
+      }
+    });
+
+    const loadBtn = document.createElement('button');
+    loadBtn.textContent = 'load';
+    loadBtn.disabled = !slot;
+    loadBtn.addEventListener('click', () => {
+      const saved = capsuleSlots[index];
+      if (!saved) return;
+      try {
+        applyLoaded(saved);
+        closeCapsules();
+        toast('loaded capsule ' + (index + 1) + ' — ' + strainName, 2200);
+      } catch(err){
+        toast('that capsule is invalid', 1800);
+      }
+    });
+
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = 'clear';
+    clearBtn.disabled = !slot;
+    clearBtn.addEventListener('click', () => {
+      if (!capsuleSlots[index]) return;
+      capsuleSlots[index] = null;
+      if (saveCapsuleSlots()){
+        renderCapsules();
+        toast('cleared capsule ' + (index + 1), 1500);
+      }
+    });
+
+    actions.append(saveBtn, loadBtn, clearBtn);
+    card.append(top, info, actions);
+    capsuleGrid.appendChild(card);
+  });
+}
+
+function openCapsules(){
+  renderCapsules();
+  capsuleModal.classList.add('on');
+}
+function closeCapsules(){ capsuleModal.classList.remove('on'); }
+
+capsuleBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  openCapsules();
+});
+document.getElementById('capsuleClose').addEventListener('click', closeCapsules);
+document.getElementById('capsuleCloseBottom').addEventListener('click', closeCapsules);
+capsuleModal.addEventListener('click', e => {
+  if (e.target === capsuleModal) closeCapsules();
+});
+
+const capsuleImportBtn = document.getElementById('capsuleImportBtn');
+const capsuleFileInput = document.getElementById('capsuleFileInput');
+capsuleImportBtn.addEventListener('click', () => capsuleFileInput.click());
+capsuleFileInput.addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  loadMoldFile(file);
+  e.target.value = '';
+});
+
+document.getElementById('menuBtn').addEventListener('click', () => {
+  panel.classList.contains('open') ? closePanel() : openPanel();
+});
+document.getElementById('closeBtn').addEventListener('click', closePanel);
+
+document.getElementById('rerollBtn').addEventListener('click', () => {
+  state.stack = 0; state.fullness = 0;
+  // A reroll should always produce a fully colored mold.
+  // Preserve appearance settings unless the current appearance is actually colorless.
+  if (state.settings.monochrome || state.settings.saturation <= 0){
+    state.settings.monochrome = false;
+    state.settings.saturation = 0.85;
+  }
+  newCulture();
+});
+document.getElementById('feedBtn').addEventListener('click', () => {
+  const a = Math.random() * TAU;
+  const d = baseR() * 0.9;
+  dropFoodLocal(
+    moldCenter.x + Math.cos(a) * d,
+    moldCenter.y + Math.sin(a) * d,
+    state.food
+  );
+  toast('dropped ' + FOODS[state.food].name.toLowerCase());
+});
+
+document.getElementById('camRecenterBtn').addEventListener('click', () => {
+  const w = localToWorld(moldCenter.x, moldCenter.y);
+  cam.wx = w.x; cam.wy = w.y; cam.follow = true;
+  toast('recentered');
+});
+document.getElementById('camFitBtn').addEventListener('click', () => {
+  cam.wx = WORLD_SIZE/2; cam.wy = WORLD_SIZE/2;
+  cam.viewW = WORLD_SIZE * 1.05;
+  cam.follow = false;
+  toast('showing full world');
+});
+
+optMono.addEventListener('change', () => {
+  state.settings.monochrome = optMono.checked; refreshPalette();
+});
+optSat.addEventListener('input', () => {
+  state.settings.saturation = parseFloat(optSat.value); refreshPalette();
+});
+optFuzz.addEventListener('input', () => {
+  state.settings.density = parseFloat(optFuzz.value);
+  const target = targetAgentCount();
+  if (agents.length < target) addAgentsFrontier(target - agents.length);
+});
+optWander.addEventListener('change', () => {
+  state.settings.wander = optWander.checked;
+});
+
+warpBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (state.behavior !== 'yhwach') return;
+  if (warpCooldown > 0){
+    toast('warp cooldown ' + Math.ceil(warpCooldown) + 's', 1200);
+    return;
+  }
+  warpArmed = !warpArmed;
+  if (warpArmed) placeFoodArmed = false;
+  updateWarpUI(); updateFoodBtnUI();
+  toast(warpArmed ? 'warp armed — tap anywhere' : 'warp cancelled', 1400);
+});
+
+foodBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  placeFoodArmed = !placeFoodArmed;
+  if (placeFoodArmed) warpArmed = false;
+  updateWarpUI(); updateFoodBtnUI();
+  toast(placeFoodArmed ? 'place food armed — tap canvas' : 'placing cancelled', 1400);
+});
+
+function doWarpToLocal(lx, ly){
+  const pad = 0.002;
+  moldCenter.x = clamp(lx, pad, 1 - pad);
+  moldCenter.y = clamp(ly, pad, 1 - pad);
+  driftVel.x = 0; driftVel.y = 0;
+  targetVel.x = 0; targetVel.y = 0;
+
+  const target = targetAgentCount();
+  clearAgents();
+  for (let i = 0; i < target; i++){
+    const a = Math.random() * TAU;
+    const r = Math.random() * 0.05;
+    spawnAgent(
+      moldCenter.x + Math.cos(a)*r,
+      moldCenter.y + Math.sin(a)*r,
+      Math.random() * TAU
+    );
+  }
+
+  const cx = (moldCenter.x * GW) | 0, cy = (moldCenter.y * GH) | 0;
+  const seedRadius = 14;
+  for (let dy = -seedRadius; dy <= seedRadius; dy++){
+    for (let dx = -seedRadius; dx <= seedRadius; dx++){
+      const d2 = dx*dx + dy*dy;
+      if (d2 > seedRadius*seedRadius) continue;
+      const gx = cx + dx, gy = cy + dy;
+      if (gx < 0 || gx >= GW || gy < 0 || gy >= GH) continue;
+      grid[gy*GW + gx] += 0.8 * (1 - Math.sqrt(d2)/seedRadius);
+    }
+  }
+
+  spawnWarpRipple(moldCenter.x, moldCenter.y);
+  cam.follow = true;
+
+  warpArmed = false;
+  warpCooldown = WARP_COOLDOWN;
+  updateWarpUI(); updateFoodBtnUI();
+  toast('⛧ warped ⛧', 1600);
+}
+
+function triggerSecretYhwach(){
+  state.forcedBehavior = 'yhwach';
+  state.stack = 0; state.fullness = 0;
+  newCulture(YHWACH_SEED_U, 'YHWACH', {
+    rarity: 'NULL',
+    sizeLevel: YHWACH_SIZE,
+    behavior: 'yhwach'
+  });
+  toast('⛧ THE ALMIGHTY ⛧', 5000);
+}
+
+function redeemCode(){
+  const raw = redeemInput.value.trim().toUpperCase();
+  if (!raw) return;
+
+  if (raw === YHWACH_CODE){
+    triggerSecretYhwach();
+    redeemInput.value = '';
+    return;
+  }
+
+  if (state.redeemedCodes.includes(raw)){
+    redeemStatus.textContent = 'code already redeemed';
+    redeemStatus.style.color = '#ff6b6b';
+    toast('already redeemed');
+    return;
+  }
+  const code = REDEEM_CODES[raw];
+  if (!code){
+    redeemStatus.textContent = 'invalid code';
+    redeemStatus.style.color = '#ff6b6b';
+    toast('invalid code');
+    return;
+  }
+  state.redeemedCodes.push(raw);
+  if (code.type === 'boost'){
+    state.boostMultiplier = code.multiplier;
+    redeemStatus.textContent = 'code accepted — ×' + code.multiplier + ' growth';
+    redeemStatus.style.color = '#ffb84a';
+    toast(code.msg, 2800);
+  }
+  redeemInput.value = '';
+  syncUI(); updateScoreboard();
+}
+redeemBtn.addEventListener('click', redeemCode);
+redeemInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter'){ e.preventDefault(); redeemCode(); }
+});
+
+const oddsModal = document.getElementById('oddsModal');
+const oddsList  = document.getElementById('oddsList');
+const behaviorOddsList = document.getElementById('behaviorOddsList');
+
+function buildOddsList(){
+  oddsList.innerHTML = '';
+  for (const r of RARITIES){
+    const pct = (r.weight / RARITY_TOTAL_WEIGHT) * 100;
+    const pctStr = pct >= 10 ? pct.toFixed(0) + '%' : pct >= 1 ? pct.toFixed(1) + '%' : pct.toFixed(2) + '%';
+    const barW = pct <= 0 ? 0 : Math.max(2, pct);
+    const abil = ABILITIES[r.name];
+    const rangeText = r.special
+      ? 'special / secret'
+      : `starts at ${r.startMin.toLocaleString()} – ${r.startMax.toLocaleString()}`;
+    const row = document.createElement('div');
+    row.className = 'odds-row';
+    row.innerHTML = `
+      <div class="odds-head">
+        <span class="odds-name" style="color:${r.color}">${r.name}</span>
+        <span class="odds-pct">${pctStr}</span>
+      </div>
+      <div class="odds-sub">${rangeText}${abil ? ' · ' + abil.name : ''}</div>
+      <div class="odds-bar"><div style="width:${barW}%;background:${r.color};box-shadow:0 0 8px ${r.color}"></div></div>
+    `;
+    oddsList.appendChild(row);
+  }
+}
+function buildBehaviorOddsList(){
+  behaviorOddsList.innerHTML = '';
+  for (const b of BEHAVIORS){
+    const pct = (b.weight / BEHAVIOR_TOTAL_WEIGHT) * 100;
+    const pctStr = pct >= 10 ? pct.toFixed(0) + '%' : pct.toFixed(1) + '%';
+    const barW = Math.max(2, pct);
+    const row = document.createElement('div');
+    row.className = 'odds-row';
+    row.innerHTML = `
+      <div class="odds-head">
+        <span class="odds-name" style="color:${b.color}">${b.label.toUpperCase()}</span>
+        <span class="odds-pct">${pctStr}</span>
+      </div>
+      <div class="odds-bar"><div style="width:${barW}%;background:${b.color};box-shadow:0 0 8px ${b.color}"></div></div>
+    `;
+    behaviorOddsList.appendChild(row);
+  }
+}
+function openOdds(){ buildOddsList(); buildBehaviorOddsList(); oddsModal.classList.add('on'); }
+function closeOdds(){ oddsModal.classList.remove('on'); }
+document.getElementById('oddsBtn').addEventListener('click', openOdds);
+document.getElementById('oddsClose').addEventListener('click', closeOdds);
+oddsModal.addEventListener('click', e => { if (e.target === oddsModal) closeOdds(); });
+
+let pointers = new Map();
+let dragStart = null;
+let pinchStartDist = 0;
+let pinchStartView = 0;
+let didDrag = false;
+
+function currentPinchDist(){
+  if (pointers.size < 2) return 0;
+  const [a, b] = [...pointers.values()];
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size === 1){
+    dragStart = { x: e.clientX, y: e.clientY, camX: cam.wx, camY: cam.wy, moved: false };
+    didDrag = false;
+    cv.classList.add('dragging');
+  } else if (pointers.size === 2){
+    pinchStartDist = currentPinchDist();
+    pinchStartView = cam.viewW;
+    dragStart = null;
+  }
+});
+
+cv.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size === 1 && dragStart){
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3){
+      didDrag = true;
+      dragStart.moved = true;
+      cam.follow = false;
+      const scale = S / cam.viewW;
+      cam.wx = dragStart.camX - dx / scale;
+      cam.wy = dragStart.camY - dy / scale;
+      const slack = cam.viewW;
+      cam.wx = clamp(cam.wx, -slack, WORLD_SIZE + slack);
+      cam.wy = clamp(cam.wy, -slack, WORLD_SIZE + slack);
+    }
+  } else if (pointers.size === 2){
+    const d = currentPinchDist();
+    if (pinchStartDist > 5){
+      const ratio = pinchStartDist / d;
+      cam.viewW = clamp(pinchStartView * ratio, cam.minView, cam.maxView);
+    }
+  }
+});
+
+cv.addEventListener('pointerup', e => {
+  const p = pointers.get(e.pointerId);
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchStartDist = 0;
+
+  if (pointers.size === 0){
+    cv.classList.remove('dragging');
+    if (!didDrag && p){
+      const world = screenToWorld(p.x, p.y);
+      const local = worldToLocal(world.x, world.y);
+
+      if (warpArmed && state.behavior === 'yhwach' && warpCooldown <= 0){
+        doWarpToLocal(local.x, local.y);
+      } else if (placeFoodArmed){
+        dropFoodLocal(local.x, local.y, state.food);
+        toast('dropped ' + FOODS[state.food].name.toLowerCase(), 900);
+      }
+    }
+    dragStart = null;
+    didDrag = false;
+  }
+});
+
+cv.addEventListener('pointercancel', e => {
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0){ cv.classList.remove('dragging'); dragStart = null; }
+});
+
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = Math.exp(e.deltaY * 0.0015);
+  cam.viewW = clamp(cam.viewW * factor, cam.minView, cam.maxView);
+  cam.follow = false;
+}, { passive: false });
+
+let lastTap = 0;
+cv.addEventListener('pointerup', e => {
+  const now = performance.now();
+  if (!didDrag && !warpArmed && !placeFoodArmed && now - lastTap < 320){
+    const w = localToWorld(moldCenter.x, moldCenter.y);
+    cam.wx = w.x; cam.wy = w.y; cam.follow = true;
+    toast('recentered', 800);
+  }
+  lastTap = now;
+});
+
+window.addEventListener('keydown', e => {
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'r' || e.key === 'R'){
+    state.stack = 0; state.fullness = 0;
+    newCulture();
+  }
+  else if (e.key === 'f' || e.key === 'F'){
+    placeFoodArmed = !placeFoodArmed;
+    if (placeFoodArmed) warpArmed = false;
+    updateWarpUI(); updateFoodBtnUI();
+    toast(placeFoodArmed ? 'place food armed' : 'placing cancelled', 1200);
+  }
+  else if (e.key === 'Escape'){
+    closePanel(); closeCapsules(); closeModal(); closeOdds();
+    if (placeFoodArmed){ placeFoodArmed = false; updateFoodBtnUI(); }
+  }
+  else if (e.key === '+' || e.key === '='){
+    cam.viewW = clamp(cam.viewW * 0.85, cam.minView, cam.maxView);
+    cam.follow = false;
+  }
+  else if (e.key === '-' || e.key === '_'){
+    cam.viewW = clamp(cam.viewW * 1.18, cam.minView, cam.maxView);
+    cam.follow = false;
+  }
+});
+
+function buildSaveObject(){
+  return {
+    format:'petmold', version: 31, savedAt:new Date().toISOString(),
+    name: strainName, seed: seed, hue: hashHue(seed),
+    // Store the generated variant too so capsule loads preserve the exact mold color.
+    variant: variant ? {
+      hueBase: +variant.hueBase,
+      hueName: variant.hueName,
+      speedMul: +variant.speedMul,
+      thicknessMul: +variant.thicknessMul,
+      speedLabel: variant.speedLabel,
+      rootsLabel: variant.rootsLabel
+    } : null,
+    fullness: +state.fullness.toFixed(4),
+    stack: state.stack,
+    sizeLevel: state.sizeLevel,
+    rarity: state.rarity,
+    behavior: state.behavior,
+    fed: state.fed, food: state.food,
+    redeemedCodes: state.redeemedCodes.slice(),
+    settings: {
+      monochrome: state.settings.monochrome,
+      saturation: +state.settings.saturation.toFixed(3),
+      density:    +state.settings.density.toFixed(3),
+      wander:     state.settings.wander
+    }
+  };
+}
+function sanitizeFilename(n){
+  return String(n||'culture').replace(/[^\w\-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,48) || 'culture';
+}
+function moldFile(){
+  const text = JSON.stringify(buildSaveObject(), null, 2);
+  const r = state.rarity.toLowerCase();
+  const name = `${sanitizeFilename(strainName)}-${r}-${state.behavior}-${seed}.txt`;
+  return { text, name };
+}
+
+function downloadMoldData(data, slotIndex){
+  const text = JSON.stringify(data, null, 2);
+  const r = String(data.rarity || state.rarity || 'common').toLowerCase();
+  const behaviorName = sanitizeFilename(data.behavior || state.behavior || 'normal');
+  const baseName = sanitizeFilename(data.name || strainName || 'mold');
+  const seedPart = (typeof data.seed === 'number' && isFinite(data.seed)) ? String(data.seed) : String(seed);
+  const slotPart = Number.isInteger(slotIndex) ? `-capsule-${String(slotIndex + 1).padStart(2,'0')}` : '';
+  const name = `${baseName}${slotPart}-${r}-${behaviorName}-${seedPart}.json`;
+  try {
+    const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      if (a.parentNode) a.parentNode.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 2500);
+    return name;
+  } catch(err) {
+    return null;
+  }
+}
+
+async function saveMold(){
+  const { text, name } = moldFile();
+  const file = new File([text], name, { type: 'text/plain' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })){
+    try {
+      await navigator.share({ files: [file], title: 'Pet Mold — ' + strainName, text: 'Culture file (' + name + ')' });
+      toast('culture shared — ' + name, 2600);
+      return;
+    } catch(err){ if (err && err.name === 'AbortError') return; }
+  }
+  try {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { if (a.parentNode) a.parentNode.removeChild(a); URL.revokeObjectURL(url); }, 2500);
+    toast('downloaded — ' + name, 2600);
+    return;
+  } catch(err){}
+  openModal('copy', text);
+}
+
+const modal     = document.getElementById('modal');
+const moldText  = document.getElementById('moldText');
+const modalTitle= document.getElementById('modalTitle');
+const modalHint = document.getElementById('modalHint');
+let modalMode = 'copy';
+
+function openModal(mode, text){
+  modalMode = mode;
+  modalTitle.textContent = (mode === 'load') ? 'paste culture code' : 'culture code';
+  modalHint.textContent  = (mode === 'load')
+    ? 'Paste a culture code below, then press Load.'
+    : 'Tap the code once to select all — then Copy.';
+  moldText.value = text || '';
+  modal.classList.add('on');
+  if (mode === 'load') setTimeout(() => moldText.focus(), 50);
+}
+function closeModal(){ modal.classList.remove('on'); }
+document.getElementById('modalClose').addEventListener('click', closeModal);
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+moldText.addEventListener('click', () => {
+  if (modalMode === 'copy' && document.activeElement !== moldText){
+    moldText.focus(); moldText.select();
+  }
+});
+
+document.getElementById('modalCopy').addEventListener('click', async () => {
+  const v = moldText.value;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(v);
+    else { moldText.focus(); moldText.select(); document.execCommand('copy'); }
+    toast('copied', 1600);
+  } catch(err){ toast('select & copy manually'); }
+});
+
+document.getElementById('modalLoad').addEventListener('click', () => {
+  try {
+    applyLoaded(JSON.parse(moldText.value));
+    closeModal();
+    toast('culture loaded — ' + strainName, 2200);
+  } catch(err){ toast('could not read that code'); }
+});
+
+function applyLoaded(d){
+  if (!d || typeof d !== 'object') throw new Error('bad');
+  if (typeof d.seed !== 'number' || !isFinite(d.seed)) throw new Error('no seed');
+
+  state.stack     = typeof d.stack === 'number'     ? clamp(Math.floor(d.stack), 0, MAX_STACK-1) : 0;
+  state.fullness  = typeof d.fullness === 'number'  ? clamp(d.fullness, 0, 1) : 0;
+  state.fed       = typeof d.fed === 'number'       ? d.fed : 0;
+  if (typeof d.food === 'string' && FOODS[d.food]) state.food = d.food;
+  if (Array.isArray(d.redeemedCodes)) state.redeemedCodes = d.redeemedCodes.slice();
+
+  let preset = null;
+  const hasRarity = typeof d.rarity === 'string' && RARITY_BY_NAME[d.rarity];
+  if (hasRarity && typeof d.sizeLevel === 'number'){
+    preset = {
+      rarity: d.rarity,
+      sizeLevel: clamp(Math.floor(d.sizeLevel), 1, MAX_LEVEL),
+      behavior: (typeof d.behavior === 'string' && BEHAVIOR_BY_NAME[d.behavior]) ? d.behavior : null
+    };
+  }
+
+  if (d.settings && typeof d.settings === 'object'){
+    const s = d.settings;
+    if (typeof s.monochrome === 'boolean') state.settings.monochrome = s.monochrome;
+    if (typeof s.saturation === 'number')  state.settings.saturation = clamp(s.saturation, 0, 1);
+    if (typeof s.density === 'number')     state.settings.density = clamp(s.density, 0.4, 2);
+    if (typeof s.wander === 'boolean')     state.settings.wander = s.wander;
+  }
+  newCulture(d.seed, typeof d.name === 'string' ? d.name : undefined, preset);
+
+  // Reapply the exact stored variant after generating the culture so a capsule
+  // restores the same color/variant instead of deriving a fresh appearance.
+  if (d.variant && typeof d.variant === 'object' && variant){
+    if (typeof d.variant.hueBase === 'number' && isFinite(d.variant.hueBase)) variant.hueBase = d.variant.hueBase;
+    if (typeof d.variant.hueName === 'string') variant.hueName = d.variant.hueName;
+    if (typeof d.variant.speedMul === 'number' && isFinite(d.variant.speedMul)) variant.speedMul = d.variant.speedMul;
+    if (typeof d.variant.thicknessMul === 'number' && isFinite(d.variant.thicknessMul)) variant.thicknessMul = d.variant.thicknessMul;
+    if (typeof d.variant.speedLabel === 'string') variant.speedLabel = d.variant.speedLabel;
+    if (typeof d.variant.rootsLabel === 'string') variant.rootsLabel = d.variant.rootsLabel;
+    AGENT_SPEED = (1 / GW) * variant.speedMul;
+    refreshPalette();
+    syncUI();
+  }
+}
+
+function loadMoldFile(file){
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try { applyLoaded(JSON.parse(String(reader.result))); toast('culture loaded — ' + strainName, 2200); }
+    catch(err){ toast('could not read that culture'); }
+  };
+  reader.onerror = () => toast('could not read that file');
+  reader.readAsText(file);
+}
+
+async function loadFromClipboard(){
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.readText){ openModal('load', ''); return; }
+    const txt = await navigator.clipboard.readText();
+    if (!txt){ openModal('load', ''); return; }
+    applyLoaded(JSON.parse(txt));
+    toast('culture loaded — ' + strainName, 2200);
+  } catch(err){ openModal('load', ''); }
+}
+
+
+newCulture();
+updateFoodBtnUI();
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
